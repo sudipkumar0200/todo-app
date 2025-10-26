@@ -7,17 +7,28 @@ import { signupSchema, loginSchema } from "../validators";
 export async function signup(req: Request, res: Response) {
   try {
     const parsed = signupSchema.safeParse(req.body);
-    if (!parsed.success)
+    if (!parsed.success) {
       return res.status(400).json({ error: parsed.error.format() });
+    }
     const { email, password, name, country } = parsed.data;
-
-    const existing = await client.user.findUnique({ where: { email } });
-    if (existing)
+    console.log("Signup attempt:", email, name, country, password);
+    const existing = await client.user.findUnique({ where: { email: email } });
+    if (existing) {
       return res.status(409).json({ error: "Email already in use" });
+    }
 
+    console.log("Hashing the password...");
     const hashed = hashPassword(password);
+
+    console.log("Creating user...");
     const user = await client.user.create({
-      data: { email, password: hashed, name, country },
+      data: {
+        email: email,
+        password: hashed,
+        name: name,
+        country: country,
+        createdAt: new Date(),
+      },
       select: {
         id: true,
         email: true,
@@ -38,7 +49,9 @@ export async function signup(req: Request, res: Response) {
     return res.status(201).json({ user, token });
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: "Internal server error" });
+    return res
+      .status(500)
+      .json({ error: "Internal server error", message: err });
   }
 }
 
@@ -49,6 +62,7 @@ export async function login(req: Request, res: Response) {
       return res.status(400).json({ error: parsed.error.format() });
     const { email, password } = parsed.data;
 
+    console.log("SignIn attempt:", email, password);
     const user = await client.user.findUnique({ where: { email } });
     if (!user) return res.status(401).json({ error: "Invalid credentials" });
 
