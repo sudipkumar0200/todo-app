@@ -4,9 +4,9 @@
     {
       "src": "src/index.ts",
       "use": "@vercel/node",
-"config": {
+      "config": {
                 "buildCommand": "npm install && npx prisma generate && npm run build"
-            }
+                }
     }
   ],
   "routes": [
