@@ -3,7 +3,8 @@ import type { ReactNode } from "react";
 import { toast } from "@/components/ui/sonner";
 
 // API Configuration
-const API_BASE_URL = "http://localhost:3001/api/v1"; // Update with your backend URL
+// const API_BASE_URL = "http://localhost:3001/api/v1"; // Update with your backend URL
+const API_BASE_URL = import.meta.env.VITE_API_URL; 
 
 // Helper function to get auth token
 const getAuthToken = () => localStorage.getItem("authToken");

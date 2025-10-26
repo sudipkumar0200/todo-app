@@ -19,8 +19,8 @@ type AuthContextType = {
 };
 
 // API Configuration
-const API_BASE_URL = "http://localhost:3001/api/v1"; // Update with your backend URL
-
+// const API_BASE_URL = "http://localhost:3001/api/v1"; // Update with your backend URL
+const API_BASE_URL = import.meta.env.VITE_API_URL;
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Mock users data
