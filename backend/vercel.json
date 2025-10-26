@@ -3,10 +3,8 @@
   "builds": [
     {
       "src": "src/index.ts",
-      "use": "@vercel/node",
-      "config":{
-        "buildsCommand":"npm install && npx prisma generate && npm run build"
-      }
+      "use": "@vercel/node"
+     
      
     }
   ],
@@ -15,5 +13,6 @@
       "src": "/(.*)",
       "dest": "src/index.ts"
     }
-  ]
+  ],
+  "installCommand": "npm install && npx prisma generate"
 }
