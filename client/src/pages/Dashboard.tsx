@@ -1,25 +1,30 @@
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMembers } from "@/contexts/MemberContext";
-import { Skeleton } from "@/components/ui/skeleton";
+// import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useNavigate } from "react-router-dom";
-import { PlusCircle, LogOut, Users } from "lucide-react";
+import { PlusCircle, LogOut, Users, KeyRound } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-provider";
-
+import { toast } from "@/components/ui/sonner";
 const Dashboard = () => {
-  const { user, logout } = useAuth();
-  const { getUserMembers, addMember, membersLoading } = useMembers();
+  const { user, logout, changePassword } = useAuth();
+  const { getUserMembers, addMember } = useMembers();
   const navigate = useNavigate();
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
   const [memberName, setMemberName] = useState("");
   const [memberEmail, setMemberEmail] = useState("");
   const [memberRole, setMemberRole] = useState("");
+  
+  const [oldPassword, setOldPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   const userMembers = user ? getUserMembers(user.id) : [];
 
@@ -30,13 +35,34 @@ const Dashboard = () => {
       name: memberName,
       email: memberEmail,
       role: memberRole,
-      userId: user.id,
+      createdById: user.id,
     });
 
     setMemberName("");
     setMemberEmail("");
     setMemberRole("");
     setIsDialogOpen(false);
+  };
+
+  const handleChangePassword = async () => {
+    if (newPassword !== confirmPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
+    
+    if (newPassword.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+
+    const success = await changePassword(oldPassword, newPassword);
+    
+    if (success) {
+      setOldPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setIsPasswordDialogOpen(false);
+    }
   };
 
   const handleLogout = () => {
@@ -60,8 +86,66 @@ const Dashboard = () => {
           <div className="flex items-center gap-4">
             <ThemeToggle />
             <span className="text-sm text-muted-foreground">
-              Hello, {user.name}
+              Hello, {user.name} ({user.role === "admin" ? "Admin" : "Member"})
             </span>
+            {user.role === "member" && (
+              <Dialog open={isPasswordDialogOpen} onOpenChange={setIsPasswordDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-2">
+                    <KeyRound className="h-4 w-4" />
+                    Change Password
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Change Your Password</DialogTitle>
+                    <DialogDescription>
+                      Update your password to keep your account secure.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="oldPassword">Current Password</Label>
+                      <Input
+                        id="oldPassword"
+                        type="password"
+                        value={oldPassword}
+                        onChange={(e) => setOldPassword(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="newPassword">New Password</Label>
+                      <Input
+                        id="newPassword"
+                        type="password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                      <Input
+                        id="confirmPassword"
+                        type="password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsPasswordDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button 
+                      onClick={handleChangePassword}
+                      disabled={!oldPassword || !newPassword || !confirmPassword}
+                    >
+                      Change Password
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            )}
             <Button variant="ghost" size="icon" onClick={handleLogout}>
               <LogOut className="h-5 w-5" />
             </Button>
@@ -74,11 +158,14 @@ const Dashboard = () => {
           <div>
             <h2 className="text-3xl font-bold mb-1">Team Members</h2>
             <p className="text-muted-foreground">
-              Manage team members and assign tasks
+              {user.role === "admin" 
+                ? "Manage team members and assign tasks" 
+                : "View your profile and manage your tasks"}
             </p>
           </div>
           
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          {user.role === "admin" && (
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button className="gap-2">
                 <PlusCircle className="h-4 w-4" />
@@ -89,7 +176,7 @@ const Dashboard = () => {
               <DialogHeader>
                 <DialogTitle>Add a new team member</DialogTitle>
                 <DialogDescription>
-                  Add the details of your new team member.
+                  Add the details of your new team member. They will receive login credentials via email with default password: 123456
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
@@ -132,26 +219,10 @@ const Dashboard = () => {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+          )}
         </div>
 
-        {membersLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[1, 2, 3].map((n) => (
-              <Card key={n} className="animate-pulse">
-                <CardHeader>
-                  <Skeleton className="h-6 w-32" />
-                  <CardDescription>
-                    <Skeleton className="h-4 w-20 mt-2" />
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Skeleton className="h-4 w-full mb-2" />
-                  <Skeleton className="h-3 w-36" />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        ) : userMembers.length === 0 ? (
+        {userMembers.length === 0 ? (
           <div className="text-center py-12">
             <Users className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
             <h3 className="text-xl font-medium mb-2">No team members yet</h3>
@@ -168,10 +239,11 @@ const Dashboard = () => {
               <Card 
                 key={member.id} 
                 className="cursor-pointer hover:shadow-md transition-shadow"
-                onClick={() => navigate(`/member/${member.id}`)}
+                onClick={() => navigate(`/member/${member.userId}`)}
               >
                 <CardHeader>
-                  <CardTitle>{member.name}</CardTitle>
+                  
+                  <CardTitle>{member.user?.name}</CardTitle>
                   <CardDescription>{member.role}</CardDescription>
                 </CardHeader>
                 <CardContent>

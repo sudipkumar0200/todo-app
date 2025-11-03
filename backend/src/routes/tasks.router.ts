@@ -1,11 +1,21 @@
-import express from "express"
-import { getTasks, createTask, updateTask, deleteTask } from "../controllers/tasks.controller"
+import { Router } from "express";
+import {
+  createTask,
+  getMemberTasks,
+  updateTask,
+  deleteTask,
+} from "../controllers/tasks.controller";
+import { authenticate } from "../middleware/auth.middleware";
+import { canManageTask, canViewMemberTasks } from "../middleware/roleCheck";
 
-const router = express.Router({ mergeParams: true })
+const router = Router();
 
-router.get("/", getTasks)
-router.post("/", createTask)
-router.put("/:taskId", updateTask)
-router.delete("/:taskId", deleteTask)
+router.use(authenticate);
 
-export default router
+router.post("/", createTask);
+router.get("/member/:memberId", canViewMemberTasks, getMemberTasks);
+router.get("/",getMemberTasks);
+router.patch("/:taskId", canManageTask, updateTask);
+router.delete("/:taskId", canManageTask, deleteTask);
+
+export default router;

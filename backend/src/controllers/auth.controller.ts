@@ -1,91 +1,161 @@
 import { Request, Response } from "express";
-import { client, JWT_SECRET } from "../config";
-import jwt from "jsonwebtoken";
-import { hashPassword, comparePassword } from "../utils/hash";
-import { signupSchema, loginSchema } from "../validators";
+import { PrismaClient, UserRole } from "@prisma/client";
+import {
+  loginSchema,
+  signupSchema,
+  changePasswordSchema,
+} from "../validation/authValidation";
+import { hashPassword, comparePassword } from "../utils/password";
+import { generateToken } from "../utils/jwt";
 
-export async function signup(req: Request, res: Response) {
+const prisma = new PrismaClient();
+declare global {
+  namespace Express {
+    interface Request {
+      user?: any;
+    }
+  }
+}
+export async function login(req: Request, res: Response): Promise<void> {
   try {
-    const parsed = signupSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ error: parsed.error.format() });
-    }
-    const { email, password, name, country } = parsed.data;
-    console.log("Signup attempt:", email, name, country, password);
-    const existing = await client.user.findUnique({ where: { email: email } });
-    if (existing) {
-      return res.status(409).json({ error: "Email already in use" });
-    }
+    const validatedData = loginSchema.parse(req.body);
 
-    console.log("Hashing the password...");
-    const hashed = hashPassword(password);
-
-    console.log("Creating user...");
-    const user = await client.user.create({
-      data: {
-        email: email,
-        password: hashed,
-        name: name,
-        country: country,
-        createdAt: new Date(),
-      },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        country: true,
-        createdAt: true,
-      },
+    const user = await prisma.user.findUnique({
+      where: { email: validatedData.email },
     });
 
-    if (!JWT_SECRET)
-      return res.status(500).json({ error: "JWT_SECRET not configured" });
-    const token = jwt.sign(
-      { userId: user.id, role: "user" },
-      JWT_SECRET as string,
-      { expiresIn: "7d" }
+    if (!user) {
+      res.status(401).json({ message: "Invalid email or password" });
+      return;
+    }
+
+    const isPasswordValid = await comparePassword(
+      validatedData.password,
+      user.password
     );
 
-    return res.status(201).json({ user, token });
-  } catch (err) {
-    console.error(err);
-    return res
-      .status(500)
-      .json({ error: "Internal server error", message: err });
+    if (!isPasswordValid) {
+      res.status(401).json({ message: "Invalid email or password" });
+      return;
+    }
+
+    const token = generateToken({
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+    });
+
+    const { password, ...userWithoutPassword } = user;
+
+    res.json({
+      token,
+      user: userWithoutPassword,
+      requiresPasswordChange: user.isPasswordReset,
+    });
+  } catch (error: any) {
+    console.error("Login error:", error);
+    if (error.name === "ZodError") {
+      res.status(400).json({ message: "Invalid input", errors: error.errors });
+      return;
+    }
+    res.status(500).json({ message: "Internal server error" });
   }
 }
 
-export async function login(req: Request, res: Response) {
+export async function signup(req: Request, res: Response): Promise<void> {
   try {
-    const parsed = loginSchema.safeParse(req.body);
-    if (!parsed.success)
-      return res.status(400).json({ error: parsed.error.format() });
-    const { email, password } = parsed.data;
+    const validatedData = signupSchema.parse(req.body);
 
-    console.log("SignIn attempt:", email, password);
-    const user = await client.user.findUnique({ where: { email } });
-    if (!user) return res.status(401).json({ error: "Invalid credentials" });
+    const existingUser = await prisma.user.findUnique({
+      where: { email: validatedData.email },
+    });
 
-    const ok = comparePassword(password, user.password);
-    if (!ok) return res.status(401).json({ error: "Invalid credentials" });
+    if (existingUser) {
+      res.status(400).json({ message: "User already exists with this email" });
+      return;
+    }
 
-    if (!JWT_SECRET)
-      return res.status(500).json({ error: "JWT_SECRET not configured" });
-    const token = jwt.sign(
-      { userId: user.id, role: "user" },
-      JWT_SECRET as string,
-      { expiresIn: "7d" }
+    const hashedPassword = await hashPassword(validatedData.password);
+
+    const user = await prisma.user.create({
+      data: {
+        email: validatedData.email,
+        password: hashedPassword,
+        name: validatedData.name,
+        role: UserRole.admin, 
+      },
+    });
+
+    const token = generateToken({
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+    });
+
+    const { password, ...userWithoutPassword } = user;
+
+    res.status(201).json({
+      token,
+      user: userWithoutPassword,
+    });
+  } catch (error:any) {
+    console.error("Signup error:", error);
+    if (error.name === "ZodError") {
+      res.status(400).json({ message: "Invalid input", errors: error.errors });
+      return;
+    }
+    res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+export async function changePassword(
+  req: Request,
+  res: Response
+): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ message: "Authentication required" });
+      return;
+    }
+
+    const validatedData = changePasswordSchema.parse(req.body);
+
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.userId },
+    });
+
+    if (!user) {
+      res.status(404).json({ message: "User not found" });
+      return;
+    }
+
+    const isOldPasswordValid = await comparePassword(
+      validatedData.oldPassword,
+      user.password
     );
 
-    const out = {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      country: user.country,
-    };
-    return res.json({ user: out, token });
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: "Internal server error" });
+    if (!isOldPasswordValid) {
+      res.status(400).json({ message: "Current password is incorrect" });
+      return;
+    }
+
+    const hashedNewPassword = await hashPassword(validatedData.newPassword);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedNewPassword,
+        isPasswordReset: false, // Mark that password has been changed
+      },
+    });
+
+    res.json({ message: "Password changed successfully" });
+  } catch (error:any) {
+    console.error("Change password error:", error);
+    if (error.name === "ZodError") {
+      res.status(400).json({ message: "Invalid input", errors: error.errors });
+      return;
+    }
+    res.status(500).json({ message: "Internal server error" });
   }
 }

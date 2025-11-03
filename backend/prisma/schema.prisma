@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -12,46 +6,15 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
-model User {
-  id        String    @id @default(uuid())
-  email     String    @unique
-  password  String
-  name      String
-  country   String
-  members   Member[]
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-}
 
-model Member {
-  id        String    @id @default(uuid())
-  name      String
-  email     String
-  role      String
-  userId    String
-  user      User      @relation(fields: [userId], references: [id])
-  tasks     Task[]
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-}
-
-model Task {
-  id          String       @id @default(uuid())
-  title       String
-  description String
-  status      TaskStatus
-  priority    TaskPriority
-  dueDate     DateTime
-  memberId    String
-  member      Member       @relation(fields: [memberId], references: [id])
-  createdAt   DateTime     @default(now())
-  completedAt DateTime?
-  updatedAt   DateTime     @updatedAt
+enum UserRole {
+  admin
+  member
 }
 
 enum TaskStatus {
   todo
-  in_progress @map("in-progress")
+  in_progress
   review
   completed
 }
@@ -61,4 +24,50 @@ enum TaskPriority {
   medium
   high
   urgent
+}
+
+model User {
+  id              String   @id @default(uuid())
+  email           String   @unique
+  password        String
+  name            String
+  role            UserRole @default(member)
+  isPasswordReset Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  members        Member[]
+  createdMembers Member[] @relation("CreatedMembers")
+
+  @@map("users")
+}
+
+model Member {
+  id          String   @id @default(uuid())
+  role        String
+  email       String
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  createdById String?
+  createdBy   User?    @relation("CreatedMembers", fields: [createdById], references: [id])
+
+  tasks Task[]
+
+  @@map("members")
+}
+
+model Task {
+  id          String       @id @default(uuid())
+  title       String
+  description String
+  status      TaskStatus   @default(todo)
+  priority    TaskPriority @default(medium)
+  dueDate     DateTime
+  memberId    String
+  member      Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  createdAt   DateTime     @default(now())
+  completedAt DateTime?
+
+  @@map("tasks")
 }

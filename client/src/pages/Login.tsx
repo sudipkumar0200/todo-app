@@ -1,37 +1,55 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
+// import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 const Login = () => {
   const navigate = useNavigate();
   const { login, signup } = useAuth();
-  
+
   // Login form
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [isLoginLoading, setIsLoginLoading] = useState(false);
-  
+
   // Signup form
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
   const [signupName, setSignupName] = useState("");
-  const [signupCountry, setSignupCountry] = useState("");
+  // const [signupCountry, setSignupCountry] = useState("");
+  // const [signupRole, setSignupRole] = useState<UserRole>("member");
   const [isSignupLoading, setIsSignupLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoginLoading(true);
-    
+
     try {
       const success = await login(loginEmail, loginPassword);
       if (success) {
-        navigate("/dashboard");
+        // Determine role from stored user and redirect accordingly
+        const stored = localStorage.getItem("user");
+        const parsed = stored ? JSON.parse(stored) : null;
+        if (parsed && parsed.role === "admin") {
+          navigate("/dashboard");
+        } else if (parsed && parsed.id) {
+          // Redirect members to their own task/member page
+          navigate(`/todos/${parsed.id}`);
+        } else {
+          // Fallback
+          navigate("/dashboard");
+        }
       }
     } finally {
       setIsLoginLoading(false);
@@ -41,9 +59,9 @@ const Login = () => {
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSignupLoading(true);
-    
+
     try {
-      const success = await signup(signupEmail, signupPassword, signupName, signupCountry);
+      const success = await signup(signupEmail, signupPassword, signupName);
       if (success) {
         navigate("/dashboard");
       }
@@ -56,7 +74,9 @@ const Login = () => {
     <div className="min-h-screen flex items-center justify-center bg-muted/40 px-4">
       <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">Task Tracker</CardTitle>
+          <CardTitle className="text-2xl font-bold text-center">
+            Task Tracker
+          </CardTitle>
           <CardDescription className="text-center">
             Manage your projects and tasks efficiently
           </CardDescription>
@@ -67,7 +87,7 @@ const Login = () => {
               <TabsTrigger value="login">Login</TabsTrigger>
               <TabsTrigger value="signup">Sign up</TabsTrigger>
             </TabsList>
-            
+
             <TabsContent value="login">
               <form onSubmit={handleLogin} className="space-y-4">
                 <div className="space-y-2">
@@ -93,12 +113,16 @@ const Login = () => {
                     onChange={(e) => setLoginPassword(e.target.value)}
                   />
                 </div>
-                <Button type="submit" className="w-full" disabled={isLoginLoading}>
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={isLoginLoading}
+                >
                   {isLoginLoading ? "Logging in..." : "Login"}
                 </Button>
               </form>
             </TabsContent>
-            
+
             <TabsContent value="signup">
               <form onSubmit={handleSignup} className="space-y-4">
                 <div className="space-y-2">
@@ -123,7 +147,7 @@ const Login = () => {
                     onChange={(e) => setSignupName(e.target.value)}
                   />
                 </div>
-                <div className="space-y-2">
+                {/* <div className="space-y-2">
                   <Label htmlFor="signup-country">Country</Label>
                   <Input
                     id="signup-country"
@@ -133,7 +157,22 @@ const Login = () => {
                     value={signupCountry}
                     onChange={(e) => setSignupCountry(e.target.value)}
                   />
-                </div>
+                </div> */}
+                {/* <div className="space-y-2">
+                  <Label htmlFor="signup-role">Role</Label>
+                  <Select value={signupRole} onValueChange={(value) => setSignupRole(value as UserRole)}>
+                    <SelectTrigger id="signup-role">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="admin">Admin</SelectItem>
+                      <SelectItem value="member">Member</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Admin: Full access to all tasks. Member: Only own tasks.
+                  </p>
+                </div> */}
                 <div className="space-y-2">
                   <Label htmlFor="signup-password">Password</Label>
                   <Input
@@ -144,7 +183,11 @@ const Login = () => {
                     onChange={(e) => setSignupPassword(e.target.value)}
                   />
                 </div>
-                <Button type="submit" className="w-full" disabled={isSignupLoading}>
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={isSignupLoading}
+                >
                   {isSignupLoading ? "Creating account..." : "Create account"}
                 </Button>
               </form>

@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -11,34 +10,41 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import MemberDetail from "./pages/MemberDetail";
+// import AdminDashboard from "./pages/AdminDashboard";
+// import Invitations from "./pages/Invitations";
 import NotFound from "./pages/NotFound";
+import TaskDetails from "./pages/TaskDetails";
+import { TaskProvider } from "./contexts/TaskContext";
 
 // const queryClient = new QueryClient();
 
 const App = () => (
   // <QueryClientProvider client={queryClient}>
-    <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
-      <TooltipProvider>
-        <AuthProvider>
-          <MemberProvider>
+  <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
+    <TooltipProvider>
+      <AuthProvider>
+        <MemberProvider>
+          <TaskProvider>
             <Toaster />
             <Sonner />
             <BrowserRouter>
               <Routes>
                 <Route path="/" element={<Login />} />
-                
+
                 <Route element={<ProtectedRoute />}>
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/member/:memberId" element={<MemberDetail />} />
+                  <Route path="/todos/:memberId" element={<TaskDetails />} />
                 </Route>
-                
+
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </BrowserRouter>
-          </MemberProvider>
-        </AuthProvider>
-      </TooltipProvider>
-    </ThemeProvider>
+          </TaskProvider>
+        </MemberProvider>
+      </AuthProvider>
+    </TooltipProvider>
+  </ThemeProvider>
   // </QueryClientProvider>
 );
 

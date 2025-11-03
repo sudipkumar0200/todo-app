@@ -1,61 +1,69 @@
-
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useState, useEffect } from "react";
 import type { ReactNode } from "react";
 import { toast } from "@/components/ui/sonner";
+
+export type UserRole = "admin" | "member";
 
 type User = {
   id: string;
   email: string;
   name: string;
-  country: string;
+  role: UserRole;
 };
 
 type AuthContextType = {
   user: User | null;
   login: (email: string, password: string) => Promise<boolean>;
-  signup: (email: string, password: string, name: string, country: string) => Promise<boolean>;
+  signup: (
+    email: string,
+    password: string,
+    name: string,
+    role?: UserRole
+  ) => Promise<boolean>;
+  changePassword: (
+    oldPassword: string,
+    newPassword: string
+  ) => Promise<boolean>;
   logout: () => void;
   isAuthenticated: boolean;
 };
 
 // API Configuration
-// const API_BASE_URL = "http://localhost:3001/api/v1"; // Update with your backend URL
-const API_BASE_URL = import.meta.env.VITE_API_URL;
+const API_BASE_URL = "http://localhost:3000/api"; // Update with your backend URL
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Mock users data
-// const mockUsers = [
-//   {
-//     id: "1",
-//     email: "john@example.com",
-//     password: "password",
-//     name: "John Doe",
-//     country: "USA",
-//   },
-//   {
-//     id: "2",
-//     email: "jane@example.com",
-//     password: "password",
-//     name: "Jane Smith",
-//     country: "Canada",
-//   },
-// ];
-
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  // Initialize user synchronously from localStorage so auth is persistent across
-  // page refreshes and components don't get a null user on first render.
+  // Initialise user synchronously from localStorage to avoid a flash redirect
+  // (ProtectedRoute or other consumers often read `isAuthenticated` on first render;
+  // loading it in `useEffect` is async and causes an initial `false` -> redirect).
   const [user, setUser] = useState<User | null>(() => {
     try {
-      const storedUser = localStorage.getItem("user");
-      return storedUser ? (JSON.parse(storedUser) as User) : null;
-    } catch (err) {
-      console.error("Failed to parse stored user:", err);
+      if (typeof window === "undefined") return null;
+      const stored = localStorage.getItem("user");
+      return stored ? (JSON.parse(stored) as User) : null;
+    } catch {
       return null;
     }
   });
 
+  // Keep local storage in sync if something else changed it; this is optional.
+  useEffect(() => {
+    const token = localStorage.getItem("authToken");
+    const storedUser = localStorage.getItem("user");
+    if (token && storedUser) {
+      const parsed = JSON.parse(storedUser);
+      // Only update if different to avoid rerenders
+      if (!user || user.id !== parsed.id) {
+        setUser(parsed);
+      }
+    }
+    // We intentionally run this only on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const login = async (email: string, password: string): Promise<boolean> => {
-       try {
+    try {
       const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: "POST",
         headers: {
@@ -71,12 +79,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
 
       const data = await response.json();
-      
+
       // Store token and user data
       localStorage.setItem("authToken", data.token);
       localStorage.setItem("user", JSON.stringify(data.user));
       setUser(data.user);
-      
+
       toast.success("Login successful!");
       return true;
     } catch (error) {
@@ -85,6 +93,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return false;
     }
 
+    // MOCK IMPLEMENTATION (Remove when backend is ready)
     // const foundUser = mockUsers.find(
     //   (u) => u.email === email && u.password === password
     // );
@@ -104,8 +113,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signup = async (
     email: string,
     password: string,
-    name: string,
-    country: string
+    name: string
   ): Promise<boolean> => {
     try {
       const response = await fetch(`${API_BASE_URL}/auth/signup`, {
@@ -113,7 +121,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ email, password, name, country }),
+        body: JSON.stringify({ email, password, name }),
       });
 
       if (!response.ok) {
@@ -123,12 +131,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
 
       const data = await response.json();
-      
+
       // Store token and user data
       localStorage.setItem("authToken", data.token);
       localStorage.setItem("user", JSON.stringify(data.user));
       setUser(data.user);
-      
+
       toast.success("Account created successfully!");
       return true;
     } catch (error) {
@@ -136,6 +144,77 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       toast.error("An error occurred during signup");
       return false;
     }
+
+    // MOCK IMPLEMENTATION (Remove when backend is ready)
+    // if (mockUsers.some((u) => u.email === email)) {
+    //   toast.error("User already exists with this email");
+    //   return false;
+    // }
+
+    // const newUser = {
+    //   id: `${mockUsers.length + 1}`,
+    //   email,
+    //   password,
+    //   name,
+    //   country,
+    //   role,
+    // };
+
+    // mockUsers.push(newUser);
+
+    // const { password: _, ...userWithoutPassword } = newUser;
+    // localStorage.setItem("user", JSON.stringify(userWithoutPassword));
+    // setUser(userWithoutPassword);
+
+    // toast.success("Account created successfully!");
+    // return true;
+  };
+
+  const changePassword = async (
+    oldPassword: string,
+    newPassword: string
+  ): Promise<boolean> => {
+    if (!user) {
+      toast.error("You must be logged in");
+      return false;
+    }
+
+    try {
+      const token = localStorage.getItem("authToken");
+      const response = await fetch(`${API_BASE_URL}/auth/change-password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ oldPassword, newPassword }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        toast.error(error.message || "Failed to change password");
+        return false;
+      }
+
+      toast.success("Password changed successfully!");
+      return true;
+    } catch (error) {
+      console.error("Change password error:", error);
+      toast.error("An error occurred while changing password");
+      return false;
+    }
+
+    // MOCK IMPLEMENTATION (Remove when backend is ready)
+    // In a real app, verify old password and update to new one
+    // const mockUser = mockUsers.find(u => u.email === user.email);
+    // if (mockUser && mockUser.password === oldPassword) {
+    //   mockUser.password = newPassword;
+    //   toast.success("Password changed successfully!");
+    //   return true;
+    // }
+
+    // toast.error("Current password is incorrect");
+    // return false;
   };
 
   const logout = () => {
@@ -167,6 +246,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         user,
         login,
         signup,
+        changePassword,
         logout,
         isAuthenticated: !!user,
       }}

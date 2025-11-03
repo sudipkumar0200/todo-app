@@ -1,16 +1,18 @@
-import express from "express"
-import authMiddleware from "../middleware/auth.middleware"
-import { getMembers, createMember } from "../controllers/members.controller"
-import tasksRouter from "./tasks.router"
+import { Router } from "express";
+import {
+  createMember,
+  getMembers,
+  getMember,
+} from "../controllers/members.controller";
+import { authenticate } from "../middleware/auth.middleware";
+import { requireAdmin } from "../middleware/roleCheck";
 
-const router = express.Router()
+const router = Router();
 
-router.use(authMiddleware)
+router.use(authenticate);
 
-router.get("/", getMembers)
-router.post("/", createMember)
+router.post("/", requireAdmin, createMember);
+router.get("/", getMembers);
+router.get("/:memberId", getMember);
 
-// mount tasks router for nested routes
-router.use( "/:memberId/tasks", tasksRouter )
-
-export default router
+export default router;

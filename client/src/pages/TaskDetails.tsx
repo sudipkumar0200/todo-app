@@ -1,58 +1,94 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { useMembers } from "@/contexts/MemberContext";
+import { toast } from "@/components/ui/sonner";
+import { useTasks } from "@/contexts/TaskContext";
 // import { Skeleton } from "@/components/ui/skeleton";
-import type {  Task, TaskStatus, TaskPriority } from "@/contexts/MemberContext";
+import type { Task, TaskStatus, TaskPriority } from "@/contexts/TaskContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, PlusCircle, Edit, Trash2, Calendar, AlertCircle } from "lucide-react";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import {
+  PlusCircle,
+  Edit,
+  Trash2,
+  Calendar,
+  AlertCircle,
+  Users,
+  KeyRound,
+  LogOut,
+} from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { ThemeToggle } from "@/components/theme-provider";
 import { format, isToday, isTomorrow, isPast } from "date-fns";
-
-
-
 const statusColors = {
-  "todo": "bg-secondary text-secondary-foreground",
-  "in-progress": "bg-amber-500 text-white",
-  "review": "bg-blue-500 text-white",
-  "completed": "bg-accent text-accent-foreground"
+  todo: "bg-secondary text-secondary-foreground",
+  in_progress: "bg-amber-500 text-white",
+  review: "bg-blue-500 text-white",
+  completed: "bg-accent text-accent-foreground",
 };
 
 const statusLabels = {
-  "todo": "To Do",
-  "in-progress": "In Progress",
-  "review": "Review",
-  "completed": "Completed"
+  todo: "To Do",
+  in_progress: "In Progress",
+  review: "Review",
+  completed: "Completed",
 };
 
 const priorityColors = {
-  "low": "bg-slate-500 text-white",
-  "medium": "bg-blue-500 text-white",
-  "high": "bg-orange-500 text-white",
-  "urgent": "bg-red-500 text-white"
+  low: "bg-slate-500 text-white",
+  medium: "bg-blue-500 text-white",
+  high: "bg-orange-500 text-white",
+  urgent: "bg-red-500 text-white",
 };
 
 const priorityLabels = {
-  "low": "Low",
-  "medium": "Medium",
-  "high": "High",
-  "urgent": "Urgent"
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+  urgent: "Urgent",
 };
 
 const MemberDetail = () => {
   const { memberId } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const { members, getMemberTasks, addTask, updateTask, deleteTask, canManageTask } = useMembers();
+  const { user, changePassword, logout } = useAuth();
+  const { getTasks, addTask, updateTask, deleteTask } = useTasks();
 
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -61,41 +97,62 @@ const MemberDetail = () => {
   const [taskDescription, setTaskDescription] = useState("");
   const [taskStatus, setTaskStatus] = useState<TaskStatus>("todo");
   const [taskPriority, setTaskPriority] = useState<TaskPriority>("medium");
-  const [taskDueDate, setTaskDueDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
+  const [taskDueDate, setTaskDueDate] = useState<string>(
+    format(new Date(), "yyyy-MM-dd")
+  );
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
-  
-  const member = members.find(m => m.id === memberId);
-  const [memberTasks, setMemberTasks] = useState<Task[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
 
-  useEffect(() => {
-    let cancelled = false;
+  const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
+  const [oldPassword, setOldPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  // Fetch tasks for the current member and keep local copy so we don't call
+  // getTasks() synchronously in render (it returns a Promise).
+  const refreshTasks = async () => {
     if (!memberId) {
-      setMemberTasks([]);
+      setTasks([]);
       return;
     }
 
-    (async () => {
-      try {
-        const fetched = await getMemberTasks(memberId);
-        if (!cancelled) setMemberTasks(fetched);
-      } catch (err) {
-        console.error("Failed to load member tasks:", err);
-        if (!cancelled) setMemberTasks([]);
-      }
-    })();
+    try {
+      const result = await getTasks(memberId);
+      setTasks(result || []);
+    } catch (err) {
+      // getTasks already shows toast on error; ensure tasks cleared
+      setTasks([]);
+    }
+  };
+  const handleChangePassword = async () => {
+    if (newPassword !== confirmPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
 
-    return () => {
-      cancelled = true;
-    };
-  }, [memberId, getMemberTasks]);
+    if (newPassword.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
 
-  const tasks = memberTasks;
+    const success = await changePassword(oldPassword, newPassword);
+
+    if (success) {
+      setOldPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setIsPasswordDialogOpen(false);
+    }
+  };
+  useEffect(() => {
+    refreshTasks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [memberId]);
 
   const tasksByStatus = {
-    "todo": tasks.filter(task => task.status === "todo"),
-    "in-progress": tasks.filter(task => task.status === "in-progress"),
-    "review": tasks.filter(task => task.status === "review"),
-    "completed": tasks.filter(task => task.status === "completed"),
+    todo: tasks.filter((task) => task.status === "todo"),
+    in_progress: tasks.filter((task) => task.status === "in_progress"),
+    review: tasks.filter((task) => task.status === "review"),
+    completed: tasks.filter((task) => task.status === "completed"),
   };
 
   useEffect(() => {
@@ -104,12 +161,27 @@ const MemberDetail = () => {
     }
   }, [isAddDialogOpen, isEditDialogOpen]);
 
-  // useEffect(() => {
-  //   if (user && member && member.userId !== user.id) {
-  //     navigate("/dashboard");
-  //   }
-  // }, [user, member, navigate]);
+  useEffect(() => {
+    // Only allow users with role 'member' to access a member's Task details page.
+    // Redirect admins or any other roles to the dashboard.
+    if (!user) return;
 
+    if (user.role !== "member") {
+      navigate("/dashboard");
+      return;
+    }
+
+    // Ensure the member belongs to the currently logged-in member user.
+  }, [user, navigate]);
+  const handleLogout = () => {
+    logout();
+    navigate("/");
+  };
+
+  if (!user) {
+    navigate("/");
+    return null;
+  }
   const resetForm = () => {
     setTaskTitle("");
     setTaskDescription("");
@@ -121,16 +193,27 @@ const MemberDetail = () => {
 
   const handleAddTask = () => {
     if (!memberId) return;
-    
-    addTask({
-      title: taskTitle,
-      description: taskDescription,
-      status: taskStatus,
-      priority: taskPriority,
-      dueDate: new Date(taskDueDate),
-      memberId,
-    });
-    
+
+    // addTask({
+    //   title: taskTitle,
+    //   description: taskDescription,
+    //   status: taskStatus,
+    //   priority: taskPriority,
+    //   dueDate: new Date(taskDueDate),
+    //   memberId,
+    // });
+    // ensure UI refresh after async operation (addTask is async)
+    Promise.resolve(
+      addTask({
+        title: taskTitle,
+        description: taskDescription,
+        status: taskStatus,
+        priority: taskPriority,
+        dueDate: new Date(taskDueDate),
+        memberId,
+      })
+    ).then(() => refreshTasks());
+
     setIsAddDialogOpen(false);
   };
 
@@ -146,7 +229,7 @@ const MemberDetail = () => {
 
   const handleUpdateTask = () => {
     if (!currentTaskId) return;
-    
+
     updateTask(currentTaskId, {
       title: taskTitle,
       description: taskDescription,
@@ -154,7 +237,17 @@ const MemberDetail = () => {
       priority: taskPriority,
       dueDate: new Date(taskDueDate),
     });
-    
+    // refresh after update
+    Promise.resolve(
+      updateTask(currentTaskId, {
+        title: taskTitle,
+        description: taskDescription,
+        status: taskStatus,
+        priority: taskPriority,
+        dueDate: new Date(taskDueDate),
+      })
+    ).then(() => refreshTasks());
+
     setIsEditDialogOpen(false);
   };
 
@@ -165,10 +258,16 @@ const MemberDetail = () => {
 
   const handleDeleteTask = () => {
     if (!currentTaskId) return;
-    
-    deleteTask(currentTaskId);
+
+    Promise.resolve(deleteTask(currentTaskId)).then(() => refreshTasks());
     setIsDeleteDialogOpen(false);
     setCurrentTaskId(null);
+  };
+
+  // Determine whether the current user can manage (edit/delete) the task.
+  // A member can manage their own tasks. Adjust logic if admins should also manage.
+  const canManageTask = (taskMemberId: string) => {
+    return String(user?.id) === String(memberId);
   };
 
   const getDueDateLabel = (dueDate: Date) => {
@@ -177,12 +276,12 @@ const MemberDetail = () => {
     return format(dueDate, "MMM dd, yyyy");
   };
 
-  if (!member) {
+  if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <h2 className="text-2xl font-bold mb-2">Member not found</h2>
-          <Button onClick={() => navigate("/dashboard")}>Back to Dashboard</Button>
+          <h2 className="text-2xl font-bold mb-2">User not found</h2>
+          <Button onClick={() => navigate("/")}>Back to Login</Button>
         </div>
       </div>
     );
@@ -191,23 +290,99 @@ const MemberDetail = () => {
   return (
     <div className="min-h-screen bg-muted/40">
       <header className="bg-background border-b border-border sticky top-0 z-10">
+        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <Users className="h-6 w-6 text-primary" />
+            <h1 className="text-2xl font-bold text-primary">Task Tracker</h1>
+          </div>
+          <div className="flex items-center gap-4">
+            <ThemeToggle />
+            <span className="text-sm text-muted-foreground">
+              Hello, {user.name} ({user.role === "admin" ? "Admin" : "Member"})
+            </span>
+            {user.role === "member" && (
+              <Dialog
+                open={isPasswordDialogOpen}
+                onOpenChange={setIsPasswordDialogOpen}
+              >
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-2">
+                    <KeyRound className="h-4 w-4" />
+                    Change Password
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Change Your Password</DialogTitle>
+                    <DialogDescription>
+                      Update your password to keep your account secure.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="oldPassword">Current Password</Label>
+                      <Input
+                        id="oldPassword"
+                        type="password"
+                        value={oldPassword}
+                        onChange={(e) => setOldPassword(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="newPassword">New Password</Label>
+                      <Input
+                        id="newPassword"
+                        type="password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="confirmPassword">
+                        Confirm New Password
+                      </Label>
+                      <Input
+                        id="confirmPassword"
+                        type="password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsPasswordDialogOpen(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={handleChangePassword}
+                      disabled={
+                        !oldPassword || !newPassword || !confirmPassword
+                      }
+                    >
+                      Change Password
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            )}
+            <Button variant="ghost" size="icon" onClick={handleLogout}>
+              <LogOut className="h-5 w-5" />
+            </Button>
+          </div>
+        </div>
         <div className="container mx-auto px-4 py-4">
-          <Button 
-            variant="ghost" 
-            className="mb-2 pl-1" 
-            onClick={() => navigate("/dashboard")}
-          >
-            <ChevronLeft className="h-4 w-4 mr-1" />
-            Back to Dashboard
-          </Button>
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-2xl font-bold">{member.name}</h1>
-              <p className="text-muted-foreground">{member.role} • {member.email}</p>
+              <h1 className="text-2xl font-bold">{user.name}</h1>
+              <p className="text-muted-foreground">
+                {user.role} • {user.email}
+              </p>
             </div>
-            
+
             <div className="flex items-center gap-4">
-              <ThemeToggle />
               <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                 <DialogTrigger asChild>
                   <Button className="gap-2">
@@ -219,7 +394,7 @@ const MemberDetail = () => {
                   <DialogHeader>
                     <DialogTitle>Add new task</DialogTitle>
                     <DialogDescription>
-                      Assign a new task to {member.name}.
+                      Assign a new task to {user.name}.
                     </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4 py-4">
@@ -245,9 +420,11 @@ const MemberDetail = () => {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="status">Status</Label>
-                        <Select 
-                          value={taskStatus} 
-                          onValueChange={(value) => setTaskStatus(value as TaskStatus)}
+                        <Select
+                          value={taskStatus}
+                          onValueChange={(value) =>
+                            setTaskStatus(value as TaskStatus)
+                          }
                         >
                           <SelectTrigger>
                             <SelectValue />
@@ -255,18 +432,24 @@ const MemberDetail = () => {
                           <SelectContent>
                             <SelectGroup>
                               <SelectItem value="todo">To Do</SelectItem>
-                              <SelectItem value="in-progress">In Progress</SelectItem>
+                              <SelectItem value="in_progress">
+                                In Progress
+                              </SelectItem>
                               <SelectItem value="review">Review</SelectItem>
-                              <SelectItem value="completed">Completed</SelectItem>
+                              <SelectItem value="completed">
+                                Completed
+                              </SelectItem>
                             </SelectGroup>
                           </SelectContent>
                         </Select>
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="priority">Priority</Label>
-                        <Select 
-                          value={taskPriority} 
-                          onValueChange={(value) => setTaskPriority(value as TaskPriority)}
+                        <Select
+                          value={taskPriority}
+                          onValueChange={(value) =>
+                            setTaskPriority(value as TaskPriority)
+                          }
                         >
                           <SelectTrigger>
                             <SelectValue />
@@ -293,7 +476,10 @@ const MemberDetail = () => {
                     </div>
                   </div>
                   <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsAddDialogOpen(false)}
+                    >
                       Cancel
                     </Button>
                     <Button onClick={handleAddTask} disabled={!taskTitle}>
@@ -318,7 +504,7 @@ const MemberDetail = () => {
             </div>
             <div className="space-y-3">
               {tasksByStatus["todo"].map((task) => (
-                <TaskCard 
+                <TaskCard
                   key={task.id}
                   task={task}
                   onEdit={() => handleEditTask(task)}
@@ -328,7 +514,10 @@ const MemberDetail = () => {
                 />
               ))}
               {tasksByStatus["todo"].length === 0 && (
-                <EmptyState status="todo" onAddTask={() => setIsAddDialogOpen(true)} />
+                <EmptyState
+                  status="todo"
+                  onAddTask={() => setIsAddDialogOpen(true)}
+                />
               )}
             </div>
           </div>
@@ -337,12 +526,12 @@ const MemberDetail = () => {
             <div className="flex items-center">
               <h2 className="text-lg font-medium">In Progress</h2>
               <Badge variant="outline" className="ml-2">
-                {tasksByStatus["in-progress"].length}
+                {tasksByStatus["in_progress"].length}
               </Badge>
             </div>
             <div className="space-y-3">
-              {tasksByStatus["in-progress"].map((task) => (
-                <TaskCard 
+              {tasksByStatus["in_progress"].map((task) => (
+                <TaskCard
                   key={task.id}
                   task={task}
                   onEdit={() => handleEditTask(task)}
@@ -351,8 +540,11 @@ const MemberDetail = () => {
                   canManage={canManageTask(task.id)}
                 />
               ))}
-              {tasksByStatus["in-progress"].length === 0 && (
-                <EmptyState status="in-progress" onAddTask={() => setIsAddDialogOpen(true)} />
+              {tasksByStatus["in_progress"].length === 0 && (
+                <EmptyState
+                  status="in_progress"
+                  onAddTask={() => setIsAddDialogOpen(true)}
+                />
               )}
             </div>
           </div>
@@ -366,7 +558,7 @@ const MemberDetail = () => {
             </div>
             <div className="space-y-3">
               {tasksByStatus["review"].map((task) => (
-                <TaskCard 
+                <TaskCard
                   key={task.id}
                   task={task}
                   onEdit={() => handleEditTask(task)}
@@ -376,7 +568,10 @@ const MemberDetail = () => {
                 />
               ))}
               {tasksByStatus["review"].length === 0 && (
-                <EmptyState status="review" onAddTask={() => setIsAddDialogOpen(true)} />
+                <EmptyState
+                  status="review"
+                  onAddTask={() => setIsAddDialogOpen(true)}
+                />
               )}
             </div>
           </div>
@@ -390,7 +585,7 @@ const MemberDetail = () => {
             </div>
             <div className="space-y-3">
               {tasksByStatus["completed"].map((task) => (
-                <TaskCard 
+                <TaskCard
                   key={task.id}
                   task={task}
                   onEdit={() => handleEditTask(task)}
@@ -400,7 +595,10 @@ const MemberDetail = () => {
                 />
               ))}
               {tasksByStatus["completed"].length === 0 && (
-                <EmptyState status="completed" onAddTask={() => setIsAddDialogOpen(true)} />
+                <EmptyState
+                  status="completed"
+                  onAddTask={() => setIsAddDialogOpen(true)}
+                />
               )}
             </div>
           </div>
@@ -435,8 +633,8 @@ const MemberDetail = () => {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="edit-status">Status</Label>
-                <Select 
-                  value={taskStatus} 
+                <Select
+                  value={taskStatus}
                   onValueChange={(value) => setTaskStatus(value as TaskStatus)}
                 >
                   <SelectTrigger>
@@ -445,7 +643,7 @@ const MemberDetail = () => {
                   <SelectContent>
                     <SelectGroup>
                       <SelectItem value="todo">To Do</SelectItem>
-                      <SelectItem value="in-progress">In Progress</SelectItem>
+                      <SelectItem value="in_progress">In Progress</SelectItem>
                       <SelectItem value="review">Review</SelectItem>
                       <SelectItem value="completed">Completed</SelectItem>
                     </SelectGroup>
@@ -454,9 +652,11 @@ const MemberDetail = () => {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="edit-priority">Priority</Label>
-                <Select 
-                  value={taskPriority} 
-                  onValueChange={(value) => setTaskPriority(value as TaskPriority)}
+                <Select
+                  value={taskPriority}
+                  onValueChange={(value) =>
+                    setTaskPriority(value as TaskPriority)
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -483,7 +683,10 @@ const MemberDetail = () => {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setIsEditDialogOpen(false)}
+            >
               Cancel
             </Button>
             <Button onClick={handleUpdateTask} disabled={!taskTitle}>
@@ -493,17 +696,24 @@ const MemberDetail = () => {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+      <AlertDialog
+        open={isDeleteDialogOpen}
+        onOpenChange={setIsDeleteDialogOpen}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the task.
+              This action cannot be undone. This will permanently delete the
+              task.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteTask} className="bg-destructive">
+            <AlertDialogAction
+              onClick={handleDeleteTask}
+              className="bg-destructive"
+            >
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -513,26 +723,51 @@ const MemberDetail = () => {
   );
 };
 
-const TaskCard = ({ task, onEdit, onDelete, getDueDateLabel, canManage }: { 
-  task: Task; 
-  onEdit: () => void; 
+const TaskCard = ({
+  task,
+  onEdit,
+  onDelete,
+  getDueDateLabel,
+  canManage,
+}: {
+  task: Task;
+  onEdit: () => void;
   onDelete: () => void;
   getDueDateLabel: (date: Date) => string;
   canManage: boolean;
 }) => {
-  const isOverdue = isPast(new Date(task.dueDate)) && task.status !== "completed";
-  
+  const isOverdue =
+    isPast(new Date(task.dueDate)) && task.status !== "completed";
+
   return (
     <Card className="shadow-sm">
       <CardHeader className="py-3 px-4 flex flex-row items-start justify-between space-y-0">
-        <CardTitle className="text-base font-medium pr-2">{task.title}</CardTitle>
+        <CardTitle className="text-base font-medium pr-2">
+          {task.title}
+        </CardTitle>
         {canManage && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8 flex shrink-0">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 flex shrink-0"
+              >
                 <span className="sr-only">Open menu</span>
-                <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-4 w-4">
-                  <path d="M3.625 7.5C3.625 8.12132 3.12132 8.625 2.5 8.625C1.87868 8.625 1.375 8.12132 1.375 7.5C1.375 6.87868 1.87868 6.375 2.5 6.375C3.12132 6.375 3.625 6.87868 3.625 7.5ZM8.625 7.5C8.625 8.12132 8.12132 8.625 7.5 8.625C6.87868 8.625 6.375 8.12132 6.375 7.5C6.375 6.87868 6.87868 6.375 7.5 6.375C8.12132 6.375 8.625 6.87868 8.625 7.5ZM13.625 7.5C13.625 8.12132 13.1213 8.625 12.5 8.625C11.8787 8.625 11.375 8.12132 11.375 7.5C11.375 6.87868 11.8787 6.375 12.5 6.375C13.1213 6.375 13.625 6.87868 13.625 7.5Z" fill="currentColor" fillRule="evenodd" clipRule="evenodd"></path>
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 15 15"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-4 w-4"
+                >
+                  <path
+                    d="M3.625 7.5C3.625 8.12132 3.12132 8.625 2.5 8.625C1.87868 8.625 1.375 8.12132 1.375 7.5C1.375 6.87868 1.87868 6.375 2.5 6.375C3.12132 6.375 3.625 6.87868 3.625 7.5ZM8.625 7.5C8.625 8.12132 8.12132 8.625 7.5 8.625C6.87868 8.625 6.375 8.12132 6.375 7.5C6.375 6.87868 6.87868 6.375 7.5 6.375C8.12132 6.375 8.625 6.87868 8.625 7.5ZM13.625 7.5C13.625 8.12132 13.1213 8.625 12.5 8.625C11.8787 8.625 11.375 8.12132 11.375 7.5C11.375 6.87868 11.8787 6.375 12.5 6.375C13.1213 6.375 13.625 6.87868 13.625 7.5Z"
+                    fill="currentColor"
+                    fillRule="evenodd"
+                    clipRule="evenodd"
+                  ></path>
                 </svg>
               </Button>
             </DropdownMenuTrigger>
@@ -562,8 +797,18 @@ const TaskCard = ({ task, onEdit, onDelete, getDueDateLabel, canManage }: {
               {priorityLabels[task.priority]}
             </Badge>
           </div>
-          <div className={`flex items-center gap-1 text-xs ${isOverdue ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
-            {isOverdue ? <AlertCircle className="h-3 w-3" /> : <Calendar className="h-3 w-3" />}
+          <div
+            className={`flex items-center gap-1 text-xs ${
+              isOverdue
+                ? "text-destructive font-medium"
+                : "text-muted-foreground"
+            }`}
+          >
+            {isOverdue ? (
+              <AlertCircle className="h-3 w-3" />
+            ) : (
+              <Calendar className="h-3 w-3" />
+            )}
             {getDueDateLabel(new Date(task.dueDate))}
             {isOverdue && " (Overdue)"}
           </div>
@@ -573,13 +818,23 @@ const TaskCard = ({ task, onEdit, onDelete, getDueDateLabel, canManage }: {
   );
 };
 
-const EmptyState = ({ status, onAddTask }: { status: TaskStatus; onAddTask: () => void }) => {
+const EmptyState = ({
+  status,
+  onAddTask,
+}: {
+  status: TaskStatus;
+  onAddTask: () => void;
+}) => {
   return (
     <div className="border border-dashed border-muted-foreground/20 rounded-lg p-4 text-center">
-      <p className="text-muted-foreground text-sm mb-2">No tasks in {statusLabels[status]}</p>
-      <Button variant="outline" size="sm" onClick={onAddTask}>
-        Add Task
-      </Button>
+      <p className="text-muted-foreground text-sm mb-2">
+        No tasks in {statusLabels[status]}
+      </p>
+      {status === "todo" && (
+        <Button variant="outline" size="sm" onClick={onAddTask}>
+          Add Task
+        </Button>
+      )}
     </div>
   );
 };
