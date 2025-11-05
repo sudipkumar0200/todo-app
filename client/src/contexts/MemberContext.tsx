@@ -2,7 +2,8 @@ import { createContext, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { toast } from "@/components/ui/sonner";
 
-const API_BASE_URL = "http://localhost:3000/api"; // Update with your backend URL
+// const API_BASE_URL = "http://localhost:3000/api"; // Update with your backend URL
+const API_BASE_URL = import.meta.env.VITE_API_URL; 
 
 import { useAuth } from "./AuthContext";
 
