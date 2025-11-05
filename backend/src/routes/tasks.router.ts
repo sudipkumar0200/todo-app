@@ -13,8 +13,8 @@ const router = Router();
 router.use(authenticate);
 
 router.post("/", createTask);
-router.get("/member/:memberId", canViewMemberTasks, getMemberTasks);
-router.get("/",getMemberTasks);
+router.get("/member/:userId", canViewMemberTasks, getMemberTasks);
+router.get("/:userId",getMemberTasks);
 router.patch("/:taskId", canManageTask, updateTask);
 router.delete("/:taskId", canManageTask, deleteTask);
 

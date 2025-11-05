@@ -2,20 +2,11 @@ import { createContext, useContext, useState } from "react";
 import type { ReactNode } from "react";
 import { toast } from "@/components/ui/sonner";
 
-// API Configuration
-const API_BASE_URL = "http://localhost:3000/api"; // Update with your backend URL
-// const API_BASE_URL = import.meta.env.VITE_API_URL;
+const API_BASE_URL = "http://localhost:3000/api"; 
 
-// Helper function to get auth token
-
-// import { createContext, useContext, useState, ReactNode, useEffect } from "react";
-// import { toast } from "@/components/ui/sonner";
 import { useAuth } from "./AuthContext";
 
-// // API Configuration
-// const API_BASE_URL = "http://localhost:3000/api"; // Update with your backend URL
 
-// Helper function to get auth token
 const getAuthToken = () => localStorage.getItem("authToken");
 
 export type TaskStatus = "todo" | "in_progress" | "review" | "completed";
@@ -47,6 +38,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  console.log(isLoading)
 
   const addTask = async (
     task: Omit<Task, "id" | "createdAt" | "completedAt">
@@ -203,7 +195,7 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     // toast.success("Task deleted successfully");
   };
 
-  const getTasks = async (memberId: string) => {
+  const getTasks = async (userId: string) => {
     const token = getAuthToken();
     if (!token) {
       toast.error("You must be logged in");
@@ -213,30 +205,15 @@ export const TaskProvider = ({ children }: { children: ReactNode }) => {
     setIsLoading(true);
     try {
       // Primary endpoint - matches update/delete routes
-      const res = await fetch(`${API_BASE_URL}/tasks`, {
+      const res = await fetch(`${API_BASE_URL}/tasks/${userId}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
 
       // Fallback to older route if server uses /tasks/:memberId
-      let data: any;
-      if (!res.ok) {
-        // try fallback endpoint
-        const fallback = await fetch(`${API_BASE_URL}/tasks/${memberId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        if (!fallback.ok) {
-          const err = await res.json().catch(() => ({}));
-          toast.error(err.message || "Failed to fetch tasks");
-          return [] as Task[];
-        }
-
-        data = await fallback.json();
-      } else {
-        data = await res.json();
-      }
+      
+      const  data = await res.json();
 
       const parsed: Task[] = (data.tasks || []).map((d: any) => ({
         id: String(d.id),

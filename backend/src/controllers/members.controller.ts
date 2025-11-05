@@ -58,9 +58,11 @@ export async function createMember(req: Request, res: Response): Promise<void> {
         createdById: req.user.userId,
       },
     });
+    const memberData = { ...member, name: memberUser.name };
 
+    console.log("Member created :", member);
     res.status(201).json({
-      member,
+      memberData,
       message: `Member added successfully. Login credentials sent to ${validatedData.email}. Default password: ${DEFAULT_PASSWORD}`,
     });
   } catch (error: any) {
@@ -83,16 +85,16 @@ export async function getMembers(req: Request, res: Response): Promise<void> {
     let members;
 
     if (req.user.role === UserRole.admin) {
-     members = await prisma.member.findMany({
+      members = await prisma.member.findMany({
         orderBy: { createdAt: "desc" },
         include: {
           user: {
             select: {
-              name: true, 
+              name: true,
             },
           },
         },
-      }); 
+      });
     } else {
       members = await prisma.member.findMany({
         where: { userId: req.user.userId },
@@ -138,6 +140,40 @@ export async function getMember(req: Request, res: Response): Promise<void> {
     res.json({ member });
   } catch (error) {
     console.error("Get member error:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+export async function deleteMember(req: Request, res: Response): Promise<void> {
+  try {
+    if (!req.user) {
+      res.status(401).json({ message: "Authentication required" });
+      return;
+    }
+
+    // Only admins can delete members
+    if (req.user.role !== UserRole.admin) {
+      res.status(403).json({ message: "Only admins can delete members" });
+      return;
+    }
+
+    const { memberId } = req.params;
+    if (!memberId) {
+      res.status(400).json({ message: "Member ID is required" });
+      return;
+    }
+
+    const member = await prisma.member.findUnique({ where: { id: memberId } });
+    if (!member) {
+      res.status(404).json({ message: "Member not found" });
+      return;
+    }
+
+    await prisma.member.delete({ where: { id: memberId } });
+
+    res.json({ message: "Member deleted successfully", memberId });
+  } catch (error) {
+    console.error("Delete member error:", error);
     res.status(500).json({ message: "Internal server error" });
   }
 }

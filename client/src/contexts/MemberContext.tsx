@@ -2,23 +2,13 @@ import { createContext, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { toast } from "@/components/ui/sonner";
 
-// API Configuration
 const API_BASE_URL = "http://localhost:3000/api"; // Update with your backend URL
-// const API_BASE_URL = import.meta.env.VITE_API_URL;
 
-// Helper function to get auth token
-
-// import { createContext, useContext, useState, ReactNode, useEffect } from "react";
-// import { toast } from "@/components/ui/sonner";
 import { useAuth } from "./AuthContext";
 
-// // API Configuration
-// const API_BASE_URL = "http://localhost:3000/api"; // Update with your backend URL
-
-// Helper function to get auth token
 const getAuthToken = () => localStorage.getItem("authToken");
 
-export type TaskStatus = "todo" | "in-progress" | "review" | "completed";
+export type TaskStatus = "todo" | "in_progress" | "review" | "completed";
 export type TaskPriority = "low" | "medium" | "high" | "urgent";
 
 export type Task = {
@@ -49,90 +39,20 @@ export type Member = {
 type MemberContextType = {
   members: Member[];
   tasks: Task[];
-  addMember: (member: Omit<Member, "id" | "createdAt">) => void;
+  addMember: (
+    member: Omit<Member, "id" | "createdAt">
+  ) => Promise<Member | void>;
   addTask: (task: Omit<Task, "id" | "createdAt" | "completedAt">) => void;
   updateTask: (id: string, updatedTask: Partial<Task>) => void;
   deleteTask: (id: string) => void;
+  deleteMember: (id: string) => Promise<boolean>;
   // getMemberTasks: (memberId: string) => Task[];
   getMemberTasks: (memberId: string) => Promise<Task[]>;
   getUserMembers: (userId: string) => Member[];
   canManageTask: (taskId: string) => boolean;
+  refreshMembers: () =>Promise< void>;
+  refreshMemberTask: (memberId:string)=>Promise< void>;
 };
-
-// Mock data
-// const mockMembers: Member[] = [
-//   {
-//     id: "1",
-//     name: "Sarah Johnson",
-//     email: "sarah@example.com",
-//     role: "Frontend Developer",
-//     userId: "1",
-//     createdAt: new Date("2023-01-10"),
-//   },
-//   {
-//     id: "2",
-//     name: "Michael Chen",
-//     email: "michael@example.com",
-//     role: "Backend Developer",
-//     userId: "1",
-//     createdAt: new Date("2023-02-15"),
-//   },
-//   {
-//     id: "3",
-//     name: "Emily Rodriguez",
-//     email: "emily@example.com",
-//     role: "UI/UX Designer",
-//     userId: "2",
-//     createdAt: new Date("2023-03-01"),
-//   },
-// ];
-
-// const mockTasks: Task[] = [
-//   {
-//     id: "1",
-//     title: "Design Homepage",
-//     description: "Create wireframes for the homepage",
-//     status: "completed",
-//     priority: "high",
-//     dueDate: new Date("2025-11-01"),
-//     memberId: "1",
-//     createdAt: new Date("2023-01-15"),
-//     completedAt: new Date("2023-01-20"),
-//   },
-//   {
-//     id: "2",
-//     title: "Develop Navigation",
-//     description: "Create responsive navigation menu",
-//     status: "in-progress",
-//     priority: "urgent",
-//     dueDate: new Date("2025-10-28"),
-//     memberId: "1",
-//     createdAt: new Date("2023-01-21"),
-//     completedAt: null,
-//   },
-//   {
-//     id: "3",
-//     title: "User Authentication",
-//     description: "Implement login and signup functionality",
-//     status: "todo",
-//     priority: "high",
-//     dueDate: new Date("2025-10-30"),
-//     memberId: "2",
-//     createdAt: new Date("2023-02-16"),
-//     completedAt: null,
-//   },
-//   {
-//     id: "4",
-//     title: "Create Social Media Posts",
-//     description: "Design posts for Facebook and Instagram",
-//     status: "review",
-//     priority: "medium",
-//     dueDate: new Date("2025-11-05"),
-//     memberId: "3",
-//     createdAt: new Date("2023-03-05"),
-//     completedAt: null,
-//   },
-// ];
 
 const MemberContext = createContext<MemberContextType | undefined>(undefined);
 
@@ -142,42 +62,40 @@ export const MemberProvider = ({ children }: { children: ReactNode }) => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
+  console.log(isLoading);
   // Fetch members on mount (when backend is ready)
-  useEffect(() => {
-    const fetchMembers = async () => {
-      const token = getAuthToken();
-      if (!token) return;
+  const fetchMembers = async () => {
+    const token = getAuthToken();
+    if (!token) return;
 
-      try {
-        setIsLoading(true);
-        const response = await fetch(`${API_BASE_URL}/members`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+    try {
+      setIsLoading(true);
+      const response = await fetch(`${API_BASE_URL}/members`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-        if (response.ok) {
-          const data = await response.json();
-          setMembers(
-            data.members.map((m: any) => ({
-              ...m,
-              createdAt: new Date(m.createdAt),
-            }))
-          );
-        }
-      } catch (error) {
-        console.error("Failed to fetch members:", error);
-      } finally {
-        setIsLoading(false);
+      if (response.ok) {
+        const data = await response.json();
+        setMembers(
+          data.members.map((m: any) => ({
+            ...m,
+            createdAt: new Date(m.createdAt),
+          }))
+        );
       }
-    };
+    } catch (error) {
+      console.error("Failed to fetch members:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  useEffect(() => {
+    if (user) fetchMembers();
+  }, [user]);
 
-    fetchMembers();
-  }, []);
-
-  // Member functions
   const addMember = async (member: Omit<Member, "id" | "createdAt">) => {
-    // Only admins can add members
     if (user?.role !== "admin") {
       toast.error("Only admins can add members");
       return;
@@ -205,29 +123,28 @@ export const MemberProvider = ({ children }: { children: ReactNode }) => {
       }
 
       const data = await response.json();
-      const newMember = {
-        ...data,
-        createdAt: new Date(data.createdAt),
+
+      // Some backends return the created member wrapped under `member` (e.g.
+      // { member: { ... }, message: '...' }). Normalize to use the nested
+      // object if present so we pick up the real createdAt returned by server.
+      const payload = data.member ?? data;
+
+      // Some backends may still omit createdAt; fall back to now only if missing.
+      const createdAtValue = payload.createdAt ?? new Date().toISOString();
+      const newMember: Member = {
+        ...payload,
+        createdAt: new Date(createdAtValue),
       };
 
-      setMembers([...members, newMember]);
+      setMembers((prev) => [...prev, newMember]);
       toast.success("Member added successfully");
+
+      // Return the created member so callers can await and react to result
+      return newMember;
     } catch (error) {
       console.error("Add member error:", error);
       toast.error("An error occurred while adding member");
     }
-
-    // MOCK IMPLEMENTATION (Remove when backend is ready)
-    // const newMember = {
-    //   ...member,
-    //   id: `${members.length + 1}`,
-    //   createdAt: new Date(),
-    // };
-
-    // setMembers([...members, newMember]);
-    // toast.success(
-    //   `Member added successfully. Login credentials sent to ${member.email}. Default password: 123456`
-    // );
   };
 
   // Task functions
@@ -241,23 +158,21 @@ export const MemberProvider = ({ children }: { children: ReactNode }) => {
     }
 
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/members/${task.memberId}/tasks`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            title: task.title,
-            description: task.description,
-            status: task.status,
-            priority: task.priority,
-            dueDate: task.dueDate,
-          }),
-        }
-      );
+      const response = await fetch(`${API_BASE_URL}/tasks`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: task.title,
+          description: task.description,
+          status: task.status,
+          priority: task.priority,
+          dueDate: task.dueDate,
+          userId: task.memberId,
+        }),
+      });
 
       if (!response.ok) {
         const error = await response.json();
@@ -279,17 +194,6 @@ export const MemberProvider = ({ children }: { children: ReactNode }) => {
       console.error("Add task error:", error);
       toast.error("An error occurred while creating task");
     }
-
-    // MOCK IMPLEMENTATION (Remove when backend is ready)
-    const newTask = {
-      ...task,
-      id: `${tasks.length + 1}`,
-      createdAt: new Date(),
-      completedAt: null,
-    };
-
-    setTasks([...tasks, newTask]);
-    toast.success("Task created successfully");
   };
 
   const updateTask = async (id: string, updatedTask: Partial<Task>) => {
@@ -303,17 +207,14 @@ export const MemberProvider = ({ children }: { children: ReactNode }) => {
     if (!task) return;
 
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/members/${task.memberId}/tasks/${id}`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(updatedTask),
-        }
-      );
+      const response = await fetch(`${API_BASE_URL}/tasks/${id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(updatedTask),
+      });
 
       if (!response.ok) {
         const error = await response.json();
@@ -335,22 +236,6 @@ export const MemberProvider = ({ children }: { children: ReactNode }) => {
       console.error("Update task error:", error);
       toast.error("An error occurred while updating task");
     }
-
-    // MOCK IMPLEMENTATION (Remove when backend is ready)
-    // setTasks(
-    //   tasks.map((task) => {
-    //     if (task.id === id) {
-    //       const completedAt =
-    //         updatedTask.status === "completed" && task.status !== "completed"
-    //           ? new Date()
-    //           : task.completedAt;
-
-    //       return { ...task, ...updatedTask, completedAt };
-    //     }
-    //     return task;
-    //   })
-    // );
-    // toast.success("Task updated successfully");
   };
 
   const deleteTask = async (id: string) => {
@@ -364,15 +249,12 @@ export const MemberProvider = ({ children }: { children: ReactNode }) => {
     if (!task) return;
 
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/members/${task.memberId}/tasks/${id}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const response = await fetch(`${API_BASE_URL}/tasks/${id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       if (!response.ok) {
         const error = await response.json();
@@ -386,32 +268,46 @@ export const MemberProvider = ({ children }: { children: ReactNode }) => {
       console.error("Delete task error:", error);
       toast.error("An error occurred while deleting task");
     }
-
-    // MOCK IMPLEMENTATION (Remove when backend is ready)
-    // setTasks(tasks.filter((task) => task.id !== id));
-    // toast.success("Task deleted successfully");
   };
 
-  // Helper functions
-  // const getMemberTasks = (memberId: string) => {
-  //   const memberTasks = tasks.filter((task) => task.memberId === memberId);
+  const deleteMember = async (id: string) => {
+    if (user?.role !== "admin") {
+      toast.error("Only admins can delete members");
+      return false;
+    }
 
-  //   // If user is admin, return all tasks
-  //   if (user?.role === "admin") {
-  //     return memberTasks;
-  //   }
+    const token = getAuthToken();
+    if (!token) {
+      toast.error("You must be logged in");
+      return false;
+    }
 
-  //   // If user is member, only return tasks for members with their email
-  //   if (user?.role === "member") {
-  //     const member = members.find((m) => m.id === memberId);
-  //     if (member && member.email === user.email) {
-  //       return memberTasks;
-  //     }
-  //     return [];
-  //   }
+    try {
+      const response = await fetch(`${API_BASE_URL}/members/${id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-  //   return memberTasks;
-  // };
+      if (!response.ok) {
+        const error = await response.json();
+        toast.error(error.message || "Failed to delete member");
+        return false;
+      }
+
+      // Remove locally
+      setMembers((prev) => prev.filter((m) => m.id !== id));
+      toast.success("Member deleted successfully");
+      return true;
+    } catch (error) {
+      console.error("Delete member error:", error);
+      toast.error("An error occurred while deleting member");
+      return false;
+    }
+  };
+
+  
   const getMemberTasks = async (memberId: string) => {
     const token = getAuthToken();
     if (!token) {
@@ -420,14 +316,11 @@ export const MemberProvider = ({ children }: { children: ReactNode }) => {
     }
 
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/tasks/member/${memberId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const response = await fetch(`${API_BASE_URL}/tasks/member/${memberId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       if (!response.ok) {
         const error = await response.json();
@@ -452,6 +345,7 @@ export const MemberProvider = ({ children }: { children: ReactNode }) => {
         return [...otherTasks, ...fetchedTasks];
       });
 
+      console.log("Fetched tasks for member:", memberId, fetchedTasks);
       return fetchedTasks;
     } catch (error) {
       console.error("Failed to fetch tasks:", error);
@@ -459,6 +353,11 @@ export const MemberProvider = ({ children }: { children: ReactNode }) => {
       return [];
     }
   };
+
+  const refreshMemberTask = async (memberId:string)=>{
+    await getMemberTasks(memberId);
+
+  }
 
   const getUserMembers = (userId: string) => {
     // Admin can see all members
@@ -489,12 +388,15 @@ export const MemberProvider = ({ children }: { children: ReactNode }) => {
         members,
         tasks,
         addMember,
+          deleteMember,
         addTask,
         updateTask,
         deleteTask,
         getMemberTasks,
         getUserMembers,
         canManageTask,
+        refreshMembers: fetchMembers,
+        refreshMemberTask,
       }}
     >
       {children}

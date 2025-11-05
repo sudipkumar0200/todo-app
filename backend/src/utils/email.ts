@@ -15,22 +15,46 @@ export async function sendMemberCredentials(
   name: string,
   password: string
 ): Promise<void> {
+   const htmlContent = `
+  <div style="background-color:#f4f4f7;padding:40px 0;font-family:Arial,Helvetica,sans-serif;">
+    <div style="max-width:600px;margin:0 auto;background-color:#ffffff;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.05);overflow:hidden;">
+      
+      <div style="background-color:#3b82f6;padding:20px 30px;color:#ffffff;text-align:center;">
+        <h1 style="margin:0;font-size:24px;">Task Manager</h1>
+      </div>
+
+      <div style="padding:30px;">
+        <h2 style="color:#111827;">Welcome to Task Manager!</h2>
+        <p style="color:#374151;">Hi <strong>${name}</strong>,</p>
+        <p style="color:#374151;">Your account has been created successfully. Here are your login credentials:</p>
+
+        <div style="background-color:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:15px;margin:20px 0;">
+          <p style="margin:0;font-size:15px;"><strong>Email:</strong> ${email}</p>
+          <p style="margin:5px 0 0;font-size:15px;"><strong>Password:</strong> ${password}</p>
+        </div>
+
+        <p style="color:#ef4444;font-weight:bold;">Important:</p>
+        <p style="color:#374151;">Please change your password after your first login for security purposes.</p>
+
+        <a href="http://localhost:5173/"
+          style="display:inline-block;margin-top:20px;background-color:#3b82f6;color:#ffffff;
+                 text-decoration:none;padding:12px 24px;border-radius:6px;font-weight:600;">
+          Login to Task Manager
+        </a>
+
+        <p style="margin-top:30px;color:#9ca3af;font-size:13px;text-align:center;">
+          © ${new Date().getFullYear()} Task Manager. All rights reserved.
+        </p>
+      </div>
+    </div>
+  </div>
+  `;
   try {
     await transporter.sendMail({
-      from: process.env.SMTP_USER,
+      from: process.env.SENDER_EMAIL,
       to: email,
       subject: "Welcome to Task Manager - Your Login Credentials",
-      html: `
-        <h2>Welcome to Task Manager!</h2>
-        <p>Hi ${name},</p>
-        <p>Your account has been created successfully. Here are your login credentials:</p>
-        <ul>
-          <li><strong>Email:</strong> ${email}</li>
-          <li><strong>Password:</strong> ${password}</li>
-        </ul>
-        <p><strong>Important:</strong> Please change your password after your first login for security purposes.</p>
-        <p>You can login at: <a href="http://localhost:5173/">http://localhost:5173/</a></p>
-      `,
+      html: htmlContent,
     });
   } catch (error) {
     console.error("Failed to send email:", error);

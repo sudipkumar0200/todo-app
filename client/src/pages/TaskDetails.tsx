@@ -229,14 +229,7 @@ const MemberDetail = () => {
 
   const handleUpdateTask = () => {
     if (!currentTaskId) return;
-
-    updateTask(currentTaskId, {
-      title: taskTitle,
-      description: taskDescription,
-      status: taskStatus,
-      priority: taskPriority,
-      dueDate: new Date(taskDueDate),
-    });
+ 
     // refresh after update
     Promise.resolve(
       updateTask(currentTaskId, {
@@ -267,6 +260,7 @@ const MemberDetail = () => {
   // Determine whether the current user can manage (edit/delete) the task.
   // A member can manage their own tasks. Adjust logic if admins should also manage.
   const canManageTask = (taskMemberId: string) => {
+    console.log(taskMemberId)
     return String(user?.id) === String(memberId);
   };
 

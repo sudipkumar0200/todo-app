@@ -16,7 +16,7 @@ export function authenticate(
 
     const token = authHeader.substring(7);
     const payload = verifyToken(token);
-    console.log("Authenticated user:", payload.userId);
+    // console.log("Authenticated user:", payload.userId);
 
     req.user = payload;
     next();

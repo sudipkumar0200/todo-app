@@ -7,6 +7,7 @@ export const createTaskSchema = z.object({
   status: z.nativeEnum(TaskStatus).default(TaskStatus.todo),
   priority: z.nativeEnum(TaskPriority).default(TaskPriority.medium),
   dueDate: z.string().datetime("Invalid date format"),
+  userId: z.string().optional()
 });
 
 export const updateTaskSchema = z.object({
