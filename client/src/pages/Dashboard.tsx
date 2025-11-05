@@ -50,9 +50,7 @@ const Dashboard = () => {
 
   // delete dialog state
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [memberToDeleteId, setMemberToDeleteId] = useState<string | null>(
-    null
-  );
+  const [memberToDeleteId, setMemberToDeleteId] = useState<string | null>(null);
   const [memberToDeleteName, setMemberToDeleteName] = useState<string | null>(
     null
   );
@@ -295,30 +293,30 @@ const Dashboard = () => {
                 onClick={() => navigate(`/member/${member.userId}`)}
               >
                 <CardHeader>
-                  <div>
-
-                  <CardTitle>{member.user?.name}</CardTitle>
-                  <CardDescription>{member.role}</CardDescription>
-
-                  </div>
-                  {user.role === "admin" && (
-                    <div className="flex justify-end mb-2">
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setMemberToDeleteId(member.id);
-                          setMemberToDeleteName(
-                            member.user?.name || member.email
-                          );
-                          setIsDeleteDialogOpen(true);
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle>{member.user?.name}</CardTitle>
+                      <CardDescription>{member.role}</CardDescription>
                     </div>
-                  )}
+                    {user.role === "admin" && (
+                      <div className="flex justify-end mb-2">
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMemberToDeleteId(member.id);
+                            setMemberToDeleteName(
+                              member.user?.name || member.email
+                            );
+                            setIsDeleteDialogOpen(true);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <p className="text-sm text-muted-foreground mb-2">
@@ -335,13 +333,16 @@ const Dashboard = () => {
       </main>
 
       {/* Delete member confirmation dialog */}
-      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+      <AlertDialog
+        open={isDeleteDialogOpen}
+        onOpenChange={setIsDeleteDialogOpen}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete the member {memberToDeleteName ?? ""}.
-              This action cannot be undone.
+              This will permanently delete the member {memberToDeleteName ?? ""}
+              . This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -364,7 +365,6 @@ const Dashboard = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
     </div>
   );
 };
