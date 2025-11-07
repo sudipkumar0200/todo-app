@@ -670,10 +670,10 @@ const MemberDetail = () => {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-dueDate">Due Date</Label>
+              <Label htmlFor="edit-dueDate">Due Date & time</Label>
               <Input
                 id="edit-dueDate"
-                type="date"
+                type="datetime-local"
                 value={taskDueDate}
                 onChange={(e) => setTaskDueDate(e.target.value)}
               />
