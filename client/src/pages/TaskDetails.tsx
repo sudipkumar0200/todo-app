@@ -97,8 +97,10 @@ const MemberDetail = () => {
   const [taskDescription, setTaskDescription] = useState("");
   const [taskStatus, setTaskStatus] = useState<TaskStatus>("todo");
   const [taskPriority, setTaskPriority] = useState<TaskPriority>("medium");
+  // Use a datetime-local friendly format (no timezone) so input[type=datetime-local]
+  // can be prefilled. Format: yyyy-MM-dd'T'HH:mm
   const [taskDueDate, setTaskDueDate] = useState<string>(
-    format(new Date(), "yyyy-MM-dd")
+    format(new Date(), "yyyy-MM-dd'T'HH:mm")
   );
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -187,7 +189,7 @@ const MemberDetail = () => {
     setTaskDescription("");
     setTaskStatus("todo");
     setTaskPriority("medium");
-    setTaskDueDate(format(new Date(), "yyyy-MM-dd"));
+    setTaskDueDate(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
     setCurrentTaskId(null);
   };
 
@@ -222,7 +224,8 @@ const MemberDetail = () => {
     setTaskDescription(task.description);
     setTaskStatus(task.status);
     setTaskPriority(task.priority);
-    setTaskDueDate(format(new Date(task.dueDate), "yyyy-MM-dd"));
+    // Format existing task dueDate into a datetime-local compatible string
+    setTaskDueDate(format(new Date(task.dueDate), "yyyy-MM-dd'T'HH:mm"));
     setCurrentTaskId(task.id);
     setIsEditDialogOpen(true);
   };
@@ -265,9 +268,9 @@ const MemberDetail = () => {
   };
 
   const getDueDateLabel = (dueDate: Date) => {
-    if (isToday(dueDate)) return "Today";
-    if (isTomorrow(dueDate)) return "Tomorrow";
-    return format(dueDate, "MMM dd, yyyy");
+    if (isToday(dueDate)) return `Today · ${format(dueDate, "hh:mm a")}`;
+    if (isTomorrow(dueDate)) return `Tomorrow · ${format(dueDate, "hh:mm a")}`;
+    return format(dueDate, "MMM dd, yyyy · hh:mm a");
   };
 
   if (!user) {
@@ -460,10 +463,10 @@ const MemberDetail = () => {
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="dueDate">Due Date</Label>
+                      <Label htmlFor="dueDate">Due Date & time</Label>
                       <Input
                         id="dueDate"
-                        type="date"
+                        type="datetime-local"
                         value={taskDueDate}
                         onChange={(e) => setTaskDueDate(e.target.value)}
                       />
@@ -779,7 +782,7 @@ const TaskCard = ({
         )}
       </CardHeader>
       <CardContent className="py-3 px-4">
-        <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
+        <p className="text-sm text-muted-foreground mb-3">
           {task.description}
         </p>
         <div className="space-y-2">
