@@ -4,9 +4,13 @@ import {
   loginSchema,
   signupSchema,
   changePasswordSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
 } from "../validation/authValidation";
 import { hashPassword, comparePassword } from "../utils/password";
 import { generateToken } from "../utils/jwt";
+import { sendPasswordResetEmail } from "../utils/email";
+import crypto from "crypto";
 
 const prisma = new PrismaClient();
 declare global {
@@ -152,6 +156,87 @@ export async function changePassword(
     res.json({ message: "Password changed successfully" });
   } catch (error:any) {
     console.error("Change password error:", error);
+    if (error.name === "ZodError") {
+      res.status(400).json({ message: "Invalid input", errors: error.errors });
+      return;
+    }
+    res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+export async function forgotPassword(
+  req: Request,
+  res: Response
+): Promise<void> {
+  try {
+    const validatedData = forgotPasswordSchema.parse(req.body);
+
+    const user = await prisma.user.findUnique({
+      where: { email: validatedData.email },
+    });
+
+    if (!user) {
+      res.status(404).json({ message: "User not found" });
+      return;
+    }
+
+    const hashedPassword = await hashPassword(validatedData.newPassword);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+        resetToken: null,
+        resetTokenExpiry: null,
+        isPasswordReset: false,
+      },
+    });
+
+    res.json({ message: "Password reset successfully" });
+  } catch (error: any) {
+    console.error("Forgot password error:", error);
+    if (error.name === "ZodError") {
+      res.status(400).json({ message: "Invalid input", errors: error.errors });
+      return;
+    }
+    res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+export async function resetPassword(
+  req: Request,
+  res: Response
+): Promise<void> {
+  try {
+    const validatedData = resetPasswordSchema.parse(req.body);
+
+    const user = await prisma.user.findFirst({
+      where: {
+        resetToken: validatedData.token,
+        resetTokenExpiry: { gte: new Date() },
+      },
+    });
+
+    if (!user) {
+      res.status(400).json({ message: "Invalid or expired reset token" });
+      return;
+    }
+
+    const hashedPassword = await hashPassword(validatedData.newPassword);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+        resetToken: null,
+        resetTokenExpiry: null,
+        isPasswordReset: false,
+      },
+    });
+
+    res.json({ message: "Password reset successfully" });
+  } catch (error: any) {
+    console.error("Reset password error:", error);
     if (error.name === "ZodError") {
       res.status(400).json({ message: "Invalid input", errors: error.errors });
       return;

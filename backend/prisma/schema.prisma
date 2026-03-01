@@ -27,14 +27,16 @@ enum TaskPriority {
 }
 
 model User {
-  id              String   @id @default(uuid())
-  email           String   @unique
-  password        String
-  name            String
-  role            UserRole @default(member)
-  isPasswordReset Boolean  @default(false)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                   String    @id @default(uuid())
+  email                String    @unique
+  password             String
+  name                 String
+  role                 UserRole  @default(member)
+  isPasswordReset      Boolean   @default(false)
+  resetToken           String?
+  resetTokenExpiry     DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   members        Member[]
   createdMembers Member[] @relation("CreatedMembers")
