@@ -1,222 +1,268 @@
 import { Request, Response } from "express";
-import { PrismaClient, UserRole, TaskStatus } from "@prisma/client";
-import {
-  createTaskSchema,
-  updateTaskSchema,
-} from "../validation/taskValidation";
+import { PrismaClient, UserRole, TaskStatus, AttendanceStatus } from "@prisma/client";
+import { createTaskSchema, updateTaskSchema } from "../validation/taskValidation";
+import { isWithinTaskSubmissionWindow, getTodayISTDate } from "../utils/attendance";
 
 const prisma = new PrismaClient();
 
 export async function createTask(req: Request, res: Response): Promise<void> {
-  try {
-    if (!req.user) {
-      res.status(401).json({ message: "Authentication required" });
-      return;
+    try {
+        if (!req.user) {
+            res.status(401).json({ message: "Authentication required" });
+            return;
+        }
+
+        const validatedData = createTaskSchema.parse(req.body);
+
+        let memberId: string;
+
+        if (req.user.role === UserRole.member) {
+            if (!isWithinTaskSubmissionWindow()) {
+                res.status(403).json({
+                    message: "Tasks can only be submitted between 9:00 AM and 11:00 AM IST",
+                });
+                return;
+            }
+
+            const member = await prisma.member.findUnique({
+                where: { userId: req.user.userId },
+                select: { id: true },
+            });
+
+            if (!member) {
+                res.status(404).json({ message: "Member not found" });
+                return;
+            }
+
+            memberId = member.id;
+        } else {
+            if (!validatedData.userId) {
+                res.status(400).json({ message: "userId is required for admin created tasks" });
+                return;
+            }
+
+            const member = await prisma.member.findUnique({
+                where: { userId: validatedData.userId },
+                select: { id: true },
+            });
+
+            if (!member) {
+                res.status(404).json({ message: "Member not found" });
+                return;
+            }
+
+            memberId = member.id;
+        }
+
+        const task = await prisma.task.create({
+            data: {
+                title: validatedData.title,
+                description: validatedData.description,
+                status: validatedData.status ?? TaskStatus.todo,
+                priority: validatedData.priority,
+                dueDate: new Date(validatedData.dueDate),
+                memberId,
+            },
+        });
+
+        if (req.user.role === UserRole.member) {
+            const today = getTodayISTDate();
+            await prisma.dailyAttendance.upsert({
+                where: { memberId_date: { memberId, date: today } },
+                update: {},
+                create: {
+                    memberId,
+                    date: today,
+                    status: AttendanceStatus.absent,
+                    taskSubmittedAt: new Date(),
+                },
+            });
+        }
+
+        res.status(201).json(task);
+    } catch (error: unknown) {
+        console.error("Create task error:", error);
+        if (isZodError(error)) {
+            res.status(400).json({ message: "Invalid input", errors: error.errors });
+            return;
+        }
+        res.status(500).json({ message: "Internal server error" });
     }
-
-    const validatedData = createTaskSchema.parse(req.body);
-
-    let member;
-    // Verify member exists
-    if (req.user.role === UserRole.member) {
-      member = await prisma.member.findUnique({
-        where: { userId: req.user.userId },
-      });
-    } else {
-      if (!validatedData.userId) {
-        res
-          .status(400)
-          .json({ message: "User ID is required for admin created tasks" });
-        return;
-      }
-      member = await prisma.member.findUnique({
-        where: { userId: validatedData.userId },
-      });
-    }
-
-    if (!member) {
-      res.status(404).json({ message: "Member not found" });
-      return;
-    }
-
-    // Check permissions: admin can create tasks for anyone, members can only create for themselves
-    // if (req.user.role !== UserRole.admin ) {
-    //   res
-    //     .status(403)
-    //     .json({ message: "You can only create tasks for yourself" });
-    //   return;
-    // }
-
-    const task = await prisma.task.create({
-      data: {
-        title: validatedData.title,
-        description: validatedData.description,
-        status: validatedData.status,
-        priority: validatedData.priority,
-        dueDate: new Date(validatedData.dueDate),
-        memberId: member.id,
-      },
-    });
-
-    res.status(201).json(task);
-  } catch (error: any) {
-    console.error("Create task error:", error);
-    if (error.name === "ZodError") {
-      res.status(400).json({ message: "Invalid input", errors: error.errors });
-      return;
-    }
-    res.status(500).json({ message: "Internal server error" });
-  }
 }
 
-export async function getMemberTasks(
-  req: Request,
-  res: Response
-): Promise<void> {
-  try {
-    if (!req.user) {
-      res.status(401).json({ message: "Authentication required" });
-      return;
+export async function getMemberTasks(req: Request, res: Response): Promise<void> {
+    try {
+        if (!req.user) {
+            res.status(401).json({ message: "Authentication required" });
+            return;
+        }
+
+        const { userId } = req.params;
+
+        const member = await prisma.member.findFirst({
+            where: { userId: userId! },
+            select: { id: true },
+        });
+
+        if (!member) {
+            res.status(404).json({ message: "Member not found" });
+            return;
+        }
+
+        const tasks = await prisma.task.findMany({
+            where: { memberId: member.id },
+            orderBy: { createdAt: "desc" },
+        });
+
+        res.json({ tasks });
+    } catch (error) {
+        console.error("Get member tasks error:", error);
+        res.status(500).json({ message: "Internal server error" });
     }
-
-    const { userId } = req.params;
-    if (!userId) {
-      res.status(400).json({ message: "Member ID is required" });
-      return;
-    }
-
-    // console.log("Getting tasks for user:", req.user);
-    const member = await prisma.member.findFirst({
-      where: { userId: userId },
-    });
-
-    if (!member) {
-      res.status(404).json({ message: "Member not found" });
-      return;
-    }
-
-    // Check permissions
-    // if (
-    //   req.user.role !== UserRole.admin
-    // ) {
-    //   res.status(403).json({ message: "Access denied" });
-    //   return;
-    // }
-
-    const tasks = await prisma.task.findMany({
-      where: { memberId: member.id },
-      orderBy: { createdAt: "desc" },
-    });
-
-    res.json({ tasks });
-  } catch (error) {
-    console.error("Get member tasks error:", error);
-    res.status(500).json({ message: "Internal server error" });
-  }
 }
 
 export async function updateTask(req: Request, res: Response): Promise<void> {
-  try {
-    if (!req.user) {
-      res.status(401).json({ message: "Authentication required" });
-      return;
+    try {
+        if (!req.user) {
+            res.status(401).json({ message: "Authentication required" });
+            return;
+        }
+
+        const taskId = req.params["taskId"];
+        if (!taskId) {
+            res.status(400).json({ message: "Task ID is required" });
+            return;
+        }
+
+        const validatedData = updateTaskSchema.parse(req.body);
+
+        const existingTask = await prisma.task.findUnique({
+            where: { id: taskId },
+            select: {
+                status: true,
+                memberId: true,
+                member: { select: { id: true, email: true } },
+            },
+        });
+
+        if (!existingTask) {
+            res.status(404).json({ message: "Task not found" });
+            return;
+        }
+
+        if (
+            req.user.role !== UserRole.admin &&
+            existingTask.member.email !== req.user.email
+        ) {
+            res.status(403).json({ message: "You can only update your own tasks" });
+            return;
+        }
+
+        const isBeingCompleted =
+            validatedData.status === TaskStatus.completed &&
+            existingTask.status !== TaskStatus.completed;
+
+        const task = await prisma.task.update({
+            where: { id: taskId },
+            data: {
+                ...(validatedData.title !== undefined && { title: validatedData.title }),
+                ...(validatedData.description !== undefined && { description: validatedData.description }),
+                ...(validatedData.status !== undefined && { status: validatedData.status }),
+                ...(validatedData.priority !== undefined && { priority: validatedData.priority }),
+                ...(validatedData.dueDate !== undefined && { dueDate: new Date(validatedData.dueDate) }),
+                ...(isBeingCompleted && { completedAt: new Date() }),
+            },
+        });
+
+        if (isBeingCompleted && req.user.role === UserRole.member) {
+            await checkAndMarkPresent(existingTask.memberId);
+        }
+
+        res.json(task);
+    } catch (error: unknown) {
+        console.error("Update task error:", error);
+        if (isZodError(error)) {
+            res.status(400).json({ message: "Invalid input", errors: error.errors });
+            return;
+        }
+        res.status(500).json({ message: "Internal server error" });
     }
-
-    const { taskId } = req.params;
-    if (!taskId) {
-      res.status(400).json({ message: "Task ID is required" });
-      return;
-    }
-    const validatedData = updateTaskSchema.parse(req.body);
-
-    const existingTask = await prisma.task.findUnique({
-      where: { id: taskId },
-      include: { member: true },
-    });
-
-    if (!existingTask) {
-      res.status(404).json({ message: "Task not found" });
-      return;
-    }
-
-    // Check permissions
-    if (
-      req.user.role !== UserRole.admin &&
-      existingTask.member.email !== req.user.email
-    ) {
-      res.status(403).json({ message: "You can only update your own tasks" });
-      return;
-    }
-
-    const updateData: any = {
-      ...validatedData,
-    };
-
-    // If status is being changed to completed, set completedAt
-    if (
-      validatedData.status === TaskStatus.completed &&
-      existingTask.status !== TaskStatus.completed
-    ) {
-      updateData.completedAt = new Date();
-    }
-
-    // If dueDate is provided, convert to Date
-    if (validatedData.dueDate) {
-      updateData.dueDate = new Date(validatedData.dueDate);
-    }
-
-    const task = await prisma.task.update({
-      where: { id: taskId },
-      data: updateData,
-    });
-
-    res.json(task);
-  } catch (error: any) {
-    console.error("Update task error:", error);
-    if (error.name === "ZodError") {
-      res.status(400).json({ message: "Invalid input", errors: error.errors });
-      return;
-    }
-    res.status(500).json({ message: "Internal server error" });
-  }
 }
 
 export async function deleteTask(req: Request, res: Response): Promise<void> {
-  try {
-    if (!req.user) {
-      res.status(401).json({ message: "Authentication required" });
-      return;
-    }
+    try {
+        if (!req.user) {
+            res.status(401).json({ message: "Authentication required" });
+            return;
+        }
 
-    const { taskId } = req.params;
-    if (!taskId) {
-      res.status(400).json({ message: "Task ID is required" });
-      return;
-    }
+        if (req.user.role !== UserRole.admin) {
+            res.status(403).json({ message: "Only admins can delete tasks" });
+            return;
+        }
 
-    const task = await prisma.task.findUnique({
-      where: { id: taskId },
-      include: { member: true },
+        const taskId = req.params["taskId"];
+        if (!taskId) {
+            res.status(400).json({ message: "Task ID is required" });
+            return;
+        }
+
+        const task = await prisma.task.findUnique({
+            where: { id: taskId },
+            select: { id: true },
+        });
+
+        if (!task) {
+            res.status(404).json({ message: "Task not found" });
+            return;
+        }
+
+        await prisma.task.delete({ where: { id: taskId } });
+
+        res.json({ message: "Task deleted successfully" });
+    } catch (error) {
+        console.error("Delete task error:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+}
+
+// ─── helpers ────────────────────────────────────────────────────────────────
+
+async function checkAndMarkPresent(memberId: string): Promise<void> {
+    const today = getTodayISTDate();
+    const tomorrow = new Date(today.getTime() + 86400000);
+
+    const todaysTasks = await prisma.task.findMany({
+        where: { memberId, createdAt: { gte: today, lt: tomorrow } },
+        select: { status: true },
     });
 
-    if (!task) {
-      res.status(404).json({ message: "Task not found" });
-      return;
-    }
+    if (todaysTasks.length === 0) return;
 
-    // Check permissions
-    if (req.user.role !== UserRole.admin) {
-      res.status(403).json({ message: "You can only delete your own tasks" });
-      return;
-    }
+    const allCompleted = todaysTasks.every((t) => t.status === TaskStatus.completed);
+    if (!allCompleted) return;
 
-    await prisma.task.delete({
-      where: { id: taskId },
+    await prisma.dailyAttendance.upsert({
+        where: { memberId_date: { memberId, date: today } },
+        update: { status: AttendanceStatus.present, allTasksCompletedAt: new Date() },
+        create: {
+            memberId,
+            date: today,
+            status: AttendanceStatus.present,
+            allTasksCompletedAt: new Date(),
+        },
     });
+}
 
-    res.json({ message: "Task deleted successfully" });
-  } catch (error) {
-    console.error("Delete task error:", error);
-    res.status(500).json({ message: "Internal server error" });
-  }
+interface ZodError {
+    name: "ZodError";
+    errors: unknown[];
+}
+
+function isZodError(error: unknown): error is ZodError {
+    return (
+        typeof error === "object" &&
+        error !== null &&
+        (error as ZodError).name === "ZodError"
+    );
 }

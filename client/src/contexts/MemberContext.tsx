@@ -80,7 +80,7 @@ export const MemberProvider = ({ children }: { children: ReactNode }) => {
       if (response.ok) {
         const data = await response.json();
         setMembers(
-          data.members.map((m: any) => ({
+          data && data?.members?.map((m: any) => ({
             ...m,
             createdAt: new Date(m.createdAt),
           }))
@@ -332,7 +332,7 @@ export const MemberProvider = ({ children }: { children: ReactNode }) => {
       const data = await response.json();
 
       // Convert date strings to Date objects for frontend use
-      const fetchedTasks: Task[] = data.tasks.map((t: any) => ({
+      const fetchedTasks: Task[] = data.tasks.map((t: Task) => ({
         ...t,
         dueDate: new Date(t.dueDate),
         createdAt: new Date(t.createdAt),
