@@ -5,6 +5,8 @@ import authRoutes from "./routes/auth.router";
 import memberRoutes from "./routes/members.router";
 import taskRoutes from "./routes/tasks.router";
 import attendanceRouter from "./routes/attendance.router";
+import { startAttendanceCronJobs } from "./cron/attendancecron";
+import { startKeepAliveCron } from "./cron/pingcron";
 
 dotenv.config();
 
@@ -37,6 +39,8 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
     res.status(500).json({ message: "Something went wrong!" });
 });
 
+startAttendanceCronJobs();
+startKeepAliveCron();
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
 });
