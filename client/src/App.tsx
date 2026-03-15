@@ -17,40 +17,48 @@ import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 import TaskDetails from "./pages/TaskDetails";
 import { TaskProvider } from "./contexts/TaskContext";
+import MemberDashboard from "./pages/MembersDashboard";
+import AdminAttendancePanel from "./pages/AdminPanel";
 
 // const queryClient = new QueryClient();
 
 const App = () => (
-  // <QueryClientProvider client={queryClient}>
-  <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
-    <TooltipProvider>
-      <AuthProvider>
-        <MemberProvider>
-          <TaskProvider>
-            <Toaster />
-            <Sonner />
-            <BrowserRouter>
-              <Routes>
-                <Route path="/" element={<Login />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/forgot-password" element={<ForgotPassword />} />
-                <Route path="/reset-password" element={<ResetPassword />} />
+    // <QueryClientProvider client={queryClient}>
+    <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
+        <TooltipProvider>
+            <AuthProvider>
+                <MemberProvider>
+                    <TaskProvider>
+                        <Toaster />
+                        <Sonner />
+                        <BrowserRouter>
+                            <Routes>
+                                <Route path="/" element={<Login />} />
+                                <Route path="/login" element={<Login />} />
+                                <Route path="/forgot-password" element={<ForgotPassword />} />
+                                <Route path="/reset-password" element={<ResetPassword />} />
 
-                <Route element={<ProtectedRoute />}>
-                  <Route path="/dashboard" element={<Dashboard />} />
-                  <Route path="/member/:memberId" element={<MemberDetail />} />
-                  <Route path="/todos/:memberId" element={<TaskDetails />} />
-                </Route>
+                                <Route element={<ProtectedRoute />}>
 
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </BrowserRouter>
-          </TaskProvider>
-        </MemberProvider>
-      </AuthProvider>
-    </TooltipProvider>
-  </ThemeProvider>
-  // </QueryClientProvider>
+                                    <Route path="/dashboard" element={<Dashboard />} />
+                                    <Route path="/attendance" element={<MemberDashboard />} />
+
+                                    {/* Admin views a specific member's attendance */}
+                                    <Route path="/dashboard/member/:memberId/attendance" element={<MemberDashboard />} />
+                                    <Route path="/admin/attendance" element={<AdminAttendancePanel />} />
+                                    <Route path="/member/:memberId" element={<MemberDetail />} />
+                                    <Route path="/todos/:memberId" element={<TaskDetails />} />
+                                </Route>
+
+                                <Route path="*" element={<NotFound />} />
+                            </Routes>
+                        </BrowserRouter>
+                    </TaskProvider>
+                </MemberProvider>
+            </AuthProvider>
+        </TooltipProvider>
+    </ThemeProvider>
+    // </QueryClientProvider>
 );
 
 export default App;
