@@ -63,7 +63,7 @@ export async function getMemberAttendanceReport(req: Request, res: Response): Pr
         const { memberId } = req.params;
 
         const member = await prisma.member.findUnique({
-            where: { id: memberId! },
+            where: { userId: memberId! },
             include: { user: { select: { name: true, email: true } } },
         });
 
