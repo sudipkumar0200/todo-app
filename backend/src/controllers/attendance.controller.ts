@@ -61,12 +61,18 @@ export async function getMemberAttendanceReport(req: Request, res: Response): Pr
         }
 
         const { memberId } = req.params;
-
-        const member = await prisma.member.findUnique({
-            where: { userId: memberId! },
+        console.log("Memeber Id ", memberId)
+        const member = await prisma.member.findFirst({
+            where: { 
+                OR : [
+                    {id: memberId! },
+                    {userId: memberId! }
+                ]
+            },
             include: { user: { select: { name: true, email: true } } },
         });
 
+        console.log("Memeber", member)
         if (!member) {
             res.status(404).json({ message: "Member not found" });
             return;
