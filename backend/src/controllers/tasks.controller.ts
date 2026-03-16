@@ -174,7 +174,9 @@ export async function updateTask(req: Request, res: Response): Promise<void> {
             },
         });
 
-        if (isBeingCompleted && req.user.role === UserRole.member) {
+        // ✅ Removed role check — always run for any completed task
+        // The member.id is always valid here since it came from the task itself
+        if (isBeingCompleted) {
             await checkAndMarkPresent(existingTask.memberId);
         }
 
@@ -232,17 +234,26 @@ async function checkAndMarkPresent(memberId: string): Promise<void> {
     const today = getTodayISTDate();
     const tomorrow = new Date(today.getTime() + 86400000);
 
+    console.log(`[attendance] checking member ${memberId} | range: ${today.toISOString()} → ${tomorrow.toISOString()}`);
+
     const todaysTasks = await prisma.task.findMany({
         where: { memberId, createdAt: { gte: today, lt: tomorrow } },
-        select: { status: true },
+        select: { status: true, createdAt: true },
     });
 
-    if (todaysTasks.length === 0) return;
+    console.log(`[attendance] found ${todaysTasks.length} tasks:`, todaysTasks);
+
+    if (todaysTasks.length === 0) {
+        console.log("[attendance] no tasks in range — skipping");
+        return;
+    }
 
     const allCompleted = todaysTasks.every((t) => t.status === TaskStatus.completed);
+    console.log(`[attendance] allCompleted: ${allCompleted}`);
+
     if (!allCompleted) return;
 
-    await prisma.dailyAttendance.upsert({
+    const result = await prisma.dailyAttendance.upsert({
         where: { memberId_date: { memberId, date: today } },
         update: { status: AttendanceStatus.present, allTasksCompletedAt: new Date() },
         create: {
@@ -252,6 +263,8 @@ async function checkAndMarkPresent(memberId: string): Promise<void> {
             allTasksCompletedAt: new Date(),
         },
     });
+
+    console.log(`[attendance] marked present:`, result.status, result.date);
 }
 
 interface ZodError {
